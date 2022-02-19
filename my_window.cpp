@@ -94,6 +94,7 @@ struct cbPerObject
 
 cbPerObject cbPerObj;
 
+
 // the WindowProc function prototype
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
