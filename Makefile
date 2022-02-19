@@ -5,9 +5,14 @@
 
 #  mingw32-make.exe partclean could be in output, but dont want it
 
+#  C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um
+
 CC = g++
 CFLAGS  = -g -std=c++17 -municode
-LIBFLAGS = -LC:\\msys64\\mingw64\\x86_64-w64-mingw32\\lib -ld3d11 -ld3dx11 -ld3dx10 -ld3dcompiler
+# LIBFLAGS = -LC:\\msys64\\mingw64\\x86_64-w64-mingw32\\lib -ld3d11 -ld3dx11 -ld3dx10 -ld3dcompiler
+LIBFLAGS = -L"C:\Program Files (x86)\Windows Kits\10\Lib\10.0.20348.0\um\x64" -ld3d11 -ld3dx11 -ld3dx10 -ld3dcompiler
+# HEADFLAGS = -I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um"
+
 RM = del /f
 
 all: output
