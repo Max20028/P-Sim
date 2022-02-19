@@ -2,6 +2,11 @@
 #define UNICODE
 #endif
 
+#ifdef DEBUG
+#define WIREFRAME
+#endif
+
+
 #include <stdio.h>
 #include <initguid.h> //Make COM happy with mingw
 
@@ -25,8 +30,8 @@
 //      #pragma comment (lib, "d3dx10.lib")
 
 // define the screen resolution 800x600
-#define SCREEN_WIDTH  300
-#define SCREEN_HEIGHT 300
+#define SCREEN_WIDTH  800
+#define SCREEN_HEIGHT 600
 
 using namespace DirectX;
 
@@ -44,6 +49,7 @@ ID3D11Buffer* squareVertBuffer;
 ID3D11DepthStencilView* depthStencilView;
 ID3D11Texture2D* depthStencilBuffer;
 ID3D11Buffer* cbPerObjectBuffer;
+ID3D11RasterizerState* WireFrame;
 
 
 XMMATRIX WVP;
@@ -305,6 +311,7 @@ void CleanD3D() {
     depthStencilView->Release();
     depthStencilBuffer->Release();
     cbPerObjectBuffer->Release();
+    WireFrame->Release();
 }
 
 // this is the function used to render a single frame
@@ -504,6 +511,17 @@ void InitGraphics() {
 
     dev->CreateBuffer(&cbbd, NULL, &cbPerObjectBuffer);
 
+    #ifdef WIREFRAME
+    //Rasterizer Stage
+    D3D11_RASTERIZER_DESC wfdesc;
+    ZeroMemory(&wfdesc, sizeof(D3D11_RASTERIZER_DESC));
+    wfdesc.FillMode = D3D11_FILL_WIREFRAME;
+    wfdesc.CullMode = D3D11_CULL_NONE;
+    dev->CreateRasterizerState(&wfdesc, &WireFrame);
+    #endif
+
+    devcon->RSSetState(WireFrame);
+
    //Setup camera
     camPosition = XMVectorSet( 0.0f, 3.0f, -8.0f, 0.0f );
     camTarget = XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f );
@@ -513,3 +531,4 @@ void InitGraphics() {
 
     camProjection = XMMatrixPerspectiveFovLH( 0.4f*3.14f, (float)SCREEN_WIDTH/SCREEN_HEIGHT, 1.0f, 1000.0f);
 }
+

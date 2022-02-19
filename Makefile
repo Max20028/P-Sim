@@ -16,14 +16,16 @@ LIBFLAGS = -L"C:\Program Files (x86)\Windows Kits\10\Lib\10.0.20348.0\um\x64" -l
 RM = del /f
 
 all: output
+debug: CFLAGS += -DDEBUG
+debug: output
 
-output:  main.o
+output:  main
 	$(CC) $(CFLAGS) -o output my_window.o $(LIBFLAGS)
 
 
-
-main.o:  
+main:  
 	$(CC) $(CFLAGS) -c my_window.cpp
+	
 
 
 # To start over from scratch, type 'make clean'.  This
