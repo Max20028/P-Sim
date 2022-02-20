@@ -9,6 +9,10 @@
 
 #include <stdio.h>
 #include <initguid.h> //Make COM happy with mingw
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <vector>
 
 // include the basic windows header files and the Direct3D header files
 #include <windows.h>
@@ -68,13 +72,7 @@ XMMATRIX Scale;
 XMMATRIX Translation;
 float rot = 0.01f;
 
-// function prototypes
-void InitD3D(HWND hWnd);     // sets up and initializes Direct3D
-void CleanD3D(void);         // closes Direct3D and releases memory
-void RenderFrame();
-void InitPipeline();
-void InitGraphics();
-void UpdateScene();
+int indsize;
 
 struct Vertex    //Overloaded Vertex Structure
 {
@@ -86,6 +84,17 @@ struct Vertex    //Overloaded Vertex Structure
     XMFLOAT3 pos;
     XMFLOAT4 color;
 };
+
+// function prototypes
+void InitD3D(HWND hWnd);     // sets up and initializes Direct3D
+void CleanD3D(void);         // closes Direct3D and releases memory
+void RenderFrame();
+void InitPipeline();
+void InitGraphics();
+void UpdateScene();
+void ImportObj(std::string filepath, Vertex* vert, DWORD* ind, int* nvert, int* nind);
+
+
 
 struct cbPerObject
 {
@@ -161,8 +170,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
         //Run update code here
         //...
+        printf("Before\n");
         UpdateScene();
+        printf("Between\n");
         RenderFrame();
+        printf("After\n");
     }
 
     //Clean D3d
@@ -333,7 +345,7 @@ void RenderFrame(void) {
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
 
         //Draw the first cube
-        devcon->DrawIndexed( 36, 0, 0 );
+        devcon->DrawIndexed( indsize, 0, 0 );
         // printf("Draw\n");
         WVP = cube2World * camView * camProjection;
         cbPerObj.WVP = XMMatrixTranspose(WVP);    
@@ -341,7 +353,7 @@ void RenderFrame(void) {
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
 
         //Draw the second cube
-        devcon->DrawIndexed( 36, 0, 0 );
+        devcon->DrawIndexed( indsize, 0, 0 );
 
     // switch the back buffer and the front buffer
     swapchain->Present(0, 0);
@@ -460,46 +472,58 @@ void InitGraphics() {
         4, 3, 7
     };
 
+    Vertex* vert;
+    DWORD* ind;
+    int vertsize;
+
+    printf("Before\n");
+
+    ImportObj("monkey.obj", vert, ind, &vertsize, &indsize);
+    printf("%d\n", vertsize);
+    printf("%d\n", indsize);
+
     //Square Index Buffer
     D3D11_BUFFER_DESC indexBufferDesc;
     ZeroMemory( &indexBufferDesc, sizeof(indexBufferDesc) );
 
     indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    indexBufferDesc.ByteWidth = sizeof(DWORD) * 12 * 3;
+    indexBufferDesc.ByteWidth = sizeof(DWORD) * indsize;
     indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
     indexBufferDesc.CPUAccessFlags = 0;
     indexBufferDesc.MiscFlags = 0;
 
+    
 
     D3D11_SUBRESOURCE_DATA iinitData;
 
-    iinitData.pSysMem = indices;
+    iinitData.pSysMem = ind;
     dev->CreateBuffer(&indexBufferDesc, &iinitData, &squareIndexBuffer);
 
     devcon->IASetIndexBuffer( squareIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
-
+printf("here");
     D3D11_BUFFER_DESC vertexBufferDesc;
     ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
 
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    vertexBufferDesc.ByteWidth = sizeof( Vertex ) * 8;
+    vertexBufferDesc.ByteWidth = sizeof( vert );
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.MiscFlags = 0;
 
     D3D11_SUBRESOURCE_DATA vertexBufferData; 
-
+printf("here");
     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
-    vertexBufferData.pSysMem = v;
+    vertexBufferData.pSysMem = vert;
+printf("here");
     dev->CreateBuffer( &vertexBufferDesc, &vertexBufferData, &squareVertBuffer);
-
+printf("here");
     //Set the vertex buffer
     UINT stride = sizeof( Vertex );
     UINT offset = 0;
     devcon->IASetVertexBuffers( 0, 1, &squareVertBuffer, &stride, &offset );
 
-
+printf("here");
     //Create constant buffer
     D3D11_BUFFER_DESC cbbd;    
     ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
@@ -531,5 +555,54 @@ void InitGraphics() {
     camView = XMMatrixLookAtLH( camPosition, camTarget, camUp );
 
     camProjection = XMMatrixPerspectiveFovLH( 0.4f*3.14f, (float)SCREEN_WIDTH/SCREEN_HEIGHT, 1.0f, 1000.0f);
+    printf("end\n");
 }
 
+void ImportObj(std::string filepath, Vertex* vert, DWORD* ind, int* nvert, int* nind) {
+    std::ifstream file;
+    file.open(filepath);
+
+    std::vector<Vertex> vertvec;
+    std::vector<int> indvec;
+
+    while(true){
+        std::string lines;
+        std::getline(file, lines);
+        if(file.eof()) break;
+        char line[lines.length()+1];
+        strcpy(line, lines.c_str());
+        // Returns first token 
+        char *token = strtok(line, " ");
+        if(strcmp(token, "v") == 0) {
+            //If this is a vertex, add to vertex array
+            token = strtok(NULL, " ");
+            float a = atof(token);
+            token = strtok(NULL, " ");
+            float b = atof(token);
+            token = strtok(NULL, "\n");
+            float c = atof(token);
+            Vertex ver = Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f);
+            ver.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            vertvec.push_back(ver);
+        } else if(strcmp(token, "f") == 0) {
+            token = strtok(NULL, " ");
+            int a = atoi(token);
+            token = strtok(NULL, " ");
+            int b = atoi(token);
+            token = strtok(NULL, "\n");
+            int c = atoi(token);
+            indvec.push_back(a);
+            indvec.push_back(b);
+            indvec.push_back(c);
+        }
+    }
+    printf("InAfter\n");
+    *nvert = vertvec.size();
+    *nind = indvec.size();
+
+    vert = new Vertex[*nvert];
+    std::copy(vertvec.begin(), vertvec.end(), vert);
+    ind = new DWORD[*nind];
+    std::copy(indvec.begin(), indvec.end(), ind);
+    file.close();
+}
