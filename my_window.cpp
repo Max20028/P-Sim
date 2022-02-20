@@ -92,7 +92,7 @@ void RenderFrame();
 void InitPipeline();
 void InitGraphics();
 void UpdateScene();
-void ImportObj(std::string filepath, Vertex* vert, DWORD* ind, int* nvert, int* nind);
+void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int* nind);
 
 
 
@@ -170,11 +170,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
         //Run update code here
         //...
-        printf("Before\n");
         UpdateScene();
-        printf("Between\n");
         RenderFrame();
-        printf("After\n");
     }
 
     //Clean D3d
@@ -434,53 +431,50 @@ void InitGraphics() {
     // };
 
     // CUBES
-    Vertex v[] =
-    {
-        Vertex( -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
-        Vertex( -1.0f, +1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f ),
-        Vertex( +1.0f, +1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f ),
-        Vertex( +1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f ),
-        Vertex( -1.0f, -1.0f, +1.0f, 0.0f, 1.0f, 1.0f, 1.0f ),
-        Vertex( -1.0f, +1.0f, +1.0f, 1.0f, 1.0f, 1.0f, 1.0f ),
-        Vertex( +1.0f, +1.0f, +1.0f, 1.0f, 0.0f, 1.0f, 1.0f ),
-        Vertex( +1.0f, -1.0f, +1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
-    };
+    // Vertex v[] =
+    // {
+    //     Vertex( -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
+    //     Vertex( -1.0f, +1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f ),
+    //     Vertex( +1.0f, +1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f ),
+    //     Vertex( +1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f ),
+    //     Vertex( -1.0f, -1.0f, +1.0f, 0.0f, 1.0f, 1.0f, 1.0f ),
+    //     Vertex( -1.0f, +1.0f, +1.0f, 1.0f, 1.0f, 1.0f, 1.0f ),
+    //     Vertex( +1.0f, +1.0f, +1.0f, 1.0f, 0.0f, 1.0f, 1.0f ),
+    //     Vertex( +1.0f, -1.0f, +1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
+    // };
 
-    DWORD indices[] = {
-        // front face
-        0, 1, 2,
-        0, 2, 3,
+    // DWORD indices[] = {
+    //     // front face
+    //     0, 1, 2,
+    //     0, 2, 3,
 
-        // back face
-        4, 6, 5,
-        4, 7, 6,
+    //     // back face
+    //     4, 6, 5,
+    //     4, 7, 6,
 
-        // left face
-        4, 5, 1,
-        4, 1, 0,
+    //     // left face
+    //     4, 5, 1,
+    //     4, 1, 0,
 
-        // right face
-        3, 2, 6,
-        3, 6, 7,
+    //     // right face
+    //     3, 2, 6,
+    //     3, 6, 7,
 
-        // top face
-        1, 5, 6,
-        1, 6, 2,
+    //     // top face
+    //     1, 5, 6,
+    //     1, 6, 2,
 
-        // bottom face
-        4, 0, 3, 
-        4, 3, 7
-    };
+    //     // bottom face
+    //     4, 0, 3, 
+    //     4, 3, 7
+    // };
 
-    Vertex* vert;
-    DWORD* ind;
+    Vertex* vert = nullptr;
+    DWORD* ind = nullptr;
     int vertsize;
 
-    printf("Before\n");
 
-    ImportObj("monkey.obj", vert, ind, &vertsize, &indsize);
-    printf("%d\n", vertsize);
-    printf("%d\n", indsize);
+    ImportObj("monkey.obj", &vert, &ind, &vertsize, &indsize);
 
     //Square Index Buffer
     D3D11_BUFFER_DESC indexBufferDesc;
@@ -501,29 +495,24 @@ void InitGraphics() {
 
     devcon->IASetIndexBuffer( squareIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
-printf("here");
     D3D11_BUFFER_DESC vertexBufferDesc;
     ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
 
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    vertexBufferDesc.ByteWidth = sizeof( vert );
+    vertexBufferDesc.ByteWidth = sizeof(Vertex) * vertsize;
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.MiscFlags = 0;
 
     D3D11_SUBRESOURCE_DATA vertexBufferData; 
-printf("here");
     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
     vertexBufferData.pSysMem = vert;
-printf("here");
     dev->CreateBuffer( &vertexBufferDesc, &vertexBufferData, &squareVertBuffer);
-printf("here");
     //Set the vertex buffer
     UINT stride = sizeof( Vertex );
     UINT offset = 0;
     devcon->IASetVertexBuffers( 0, 1, &squareVertBuffer, &stride, &offset );
 
-printf("here");
     //Create constant buffer
     D3D11_BUFFER_DESC cbbd;    
     ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
@@ -555,15 +544,14 @@ printf("here");
     camView = XMMatrixLookAtLH( camPosition, camTarget, camUp );
 
     camProjection = XMMatrixPerspectiveFovLH( 0.4f*3.14f, (float)SCREEN_WIDTH/SCREEN_HEIGHT, 1.0f, 1000.0f);
-    printf("end\n");
 }
 
-void ImportObj(std::string filepath, Vertex* vert, DWORD* ind, int* nvert, int* nind) {
+void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int* nind) {
     std::ifstream file;
     file.open(filepath);
 
     std::vector<Vertex> vertvec;
-    std::vector<int> indvec;
+    std::vector<DWORD> indvec;
 
     while(true){
         std::string lines;
@@ -581,9 +569,8 @@ void ImportObj(std::string filepath, Vertex* vert, DWORD* ind, int* nvert, int* 
             float b = atof(token);
             token = strtok(NULL, "\n");
             float c = atof(token);
-            Vertex ver = Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f);
-            ver.color = {1.0f, 1.0f, 1.0f, 1.0f};
-            vertvec.push_back(ver);
+            // Vertex ver = Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f);
+            vertvec.push_back(Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f));
         } else if(strcmp(token, "f") == 0) {
             token = strtok(NULL, " ");
             int a = atoi(token);
@@ -599,10 +586,11 @@ void ImportObj(std::string filepath, Vertex* vert, DWORD* ind, int* nvert, int* 
     printf("InAfter\n");
     *nvert = vertvec.size();
     *nind = indvec.size();
+    printf("%f\n", vertvec[0].pos.x);
 
-    vert = new Vertex[*nvert];
-    std::copy(vertvec.begin(), vertvec.end(), vert);
-    ind = new DWORD[*nind];
-    std::copy(indvec.begin(), indvec.end(), ind);
+    *vert = new Vertex[*nvert];
+    std::copy(vertvec.begin(), vertvec.end(), *vert);
+    *ind = new DWORD[*nind];
+    std::copy(indvec.begin(), indvec.end(), *ind);
     file.close();
 }
