@@ -412,62 +412,6 @@ void InitPipeline()
 
 void InitGraphics() {
     printf("InitGraphics\n");
-    //The Triangle
-    // VERTEX triangle[] = {
-    //     {0.0f, 0.5f, 0.0f, {1,0,0,1}},
-    //     {0.45f, -0.5f, 0.0f, {0,1,0,1}},
-    //     {-0.45f, -0.5f, 0.0f, {0,0,1,1}}
-    // };
-    // The Square
-    // VERTEX v[] = {
-    //     { -0.5f, -0.5f, 0.5f, {1.0f, 0.0f, 0.0f, 1.0f} },
-    //     { -0.5f,  0.5f, 0.5f, {0.0f, 1.0f, 0.0f, 1.0f} },
-    //     {  0.5f,  0.5f, 0.5f, {0.0f, 0.0f, 1.0f, 1.0f} },
-    //     {  0.5f, -0.5f, 0.5f, {0.0f, 1.0f, 0.0f, 1.0f} },
-    // };
-    // DWORD indices[] = {
-    //     0, 1, 2,
-    //     0, 2, 3,
-    // };
-
-    // CUBES
-    // Vertex v[] =
-    // {
-    //     Vertex( -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
-    //     Vertex( -1.0f, +1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f ),
-    //     Vertex( +1.0f, +1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f ),
-    //     Vertex( +1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f ),
-    //     Vertex( -1.0f, -1.0f, +1.0f, 0.0f, 1.0f, 1.0f, 1.0f ),
-    //     Vertex( -1.0f, +1.0f, +1.0f, 1.0f, 1.0f, 1.0f, 1.0f ),
-    //     Vertex( +1.0f, +1.0f, +1.0f, 1.0f, 0.0f, 1.0f, 1.0f ),
-    //     Vertex( +1.0f, -1.0f, +1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
-    // };
-
-    // DWORD indices[] = {
-    //     // front face
-    //     0, 1, 2,
-    //     0, 2, 3,
-
-    //     // back face
-    //     4, 6, 5,
-    //     4, 7, 6,
-
-    //     // left face
-    //     4, 5, 1,
-    //     4, 1, 0,
-
-    //     // right face
-    //     3, 2, 6,
-    //     3, 6, 7,
-
-    //     // top face
-    //     1, 5, 6,
-    //     1, 6, 2,
-
-    //     // bottom face
-    //     4, 0, 3, 
-    //     4, 3, 7
-    // };
 
     Vertex* vert = nullptr;
     DWORD* ind = nullptr;
@@ -578,9 +522,9 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
             int b = atoi(token);
             token = strtok(NULL, "\n");
             int c = atoi(token);
-            indvec.push_back(a);
-            indvec.push_back(b);
-            indvec.push_back(c);
+            indvec.push_back(a-1);
+            indvec.push_back(b-1);
+            indvec.push_back(c-1);
         }
     }
     printf("InAfter\n");
