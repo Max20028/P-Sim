@@ -53,6 +53,7 @@ ID3D11Buffer* squareVertBuffer;
 ID3D11DepthStencilView* depthStencilView;
 ID3D11Texture2D* depthStencilBuffer;
 ID3D11Buffer* cbPerObjectBuffer;
+ID3D11Buffer* cbPerFrameBuffer;
 ID3D11RasterizerState* WireFrame;
 
 
@@ -78,11 +79,13 @@ struct Vertex    //Overloaded Vertex Structure
 {
     Vertex(){}
     Vertex(float x, float y, float z,
-        float cr, float cg, float cb, float ca)
-        : pos(x,y,z), color(cr, cg, cb, ca){}
+        float cr, float cg, float cb, float ca,
+        float nx, float ny, float nz)
+        : pos(x,y,z), color(cr, cg, cb, ca), normal(nx,ny,nz){}
 
     XMFLOAT3 pos;
     XMFLOAT4 color;
+    XMFLOAT3 normal;
 };
 
 // function prototypes
@@ -99,9 +102,31 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
 struct cbPerObject
 {
     XMMATRIX  WVP;
+    XMMATRIX World;
 };
 
 cbPerObject cbPerObj;
+
+struct Light
+{
+    Light()
+    {
+        ZeroMemory(this, sizeof(Light));
+    }
+    XMFLOAT3 dir;
+    float pad;
+    XMFLOAT4 ambient;
+    XMFLOAT4 diffuse;
+};
+
+Light light;
+
+struct cbPerFrame
+{
+    Light  light;
+};
+
+cbPerFrame constbuffPerFrame;
 
 
 // the WindowProc function prototype
@@ -321,6 +346,7 @@ void CleanD3D() {
     depthStencilView->Release();
     depthStencilBuffer->Release();
     cbPerObjectBuffer->Release();
+    cbPerFrameBuffer->Release();
     WireFrame->Release();
 }
 
@@ -382,7 +408,8 @@ void InitPipeline()
     D3D11_INPUT_ELEMENT_DESC ied[] =
     {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}, 
+        { "NORMAL",     0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
 
     dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
@@ -412,6 +439,10 @@ void InitPipeline()
 
 void InitGraphics() {
     printf("InitGraphics\n");
+
+    light.dir = XMFLOAT3(0.25f, 0.5f, -1.0f);
+    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+    light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     Vertex* vert = nullptr;
     DWORD* ind = nullptr;
@@ -505,6 +536,7 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
         strcpy(line, lines.c_str());
         // Returns first token 
         char *token = strtok(line, " ");
+        std::vector<XMFLOAT3> norms;
         if(strcmp(token, "v") == 0) {
             //If this is a vertex, add to vertex array
             token = strtok(NULL, " ");
@@ -514,9 +546,10 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
             token = strtok(NULL, "\n");
             float c = atof(token);
             // Vertex ver = Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f);
-            vertvec.push_back(Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f));
+            vertvec.push_back(Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f,0,0,0));
         } else if(strcmp(token, "f") == 0) {
             token = strtok(NULL, " ");
+                char* ptok = strtok(token, "//");
             int a = atoi(token);
             token = strtok(NULL, " ");
             int b = atoi(token);
@@ -525,6 +558,14 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
             indvec.push_back(a-1);
             indvec.push_back(b-1);
             indvec.push_back(c-1);
+        } else if(strcmp(token, "vn") == 0) {
+            token = strtok(NULL, " ");
+            int a = atoi(token);
+            token = strtok(NULL, " ");
+            int b = atoi(token);
+            token = strtok(NULL, "\n");
+            int c = atoi(token);
+            norms.push_back(XMFLOAT3(a,b,c));
         }
     }
     printf("InAfter\n");
