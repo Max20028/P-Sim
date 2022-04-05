@@ -26,5 +26,10 @@ VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD)
 
 float4 PShader(VOut input) : SV_TARGET
 {
-    return ObjTexture.Sample(ObjSamplerState, input.texcoord);
+    
+    float4 diffuse = ObjTexture.Sample(ObjSamplerState, input.texcoord);
+
+    clip(diffuse.a - .25);
+
+    return diffuse;
 }

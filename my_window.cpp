@@ -61,6 +61,8 @@ ID3D11SamplerState* CubesTexSamplerState; //Stores the sampler, I think this is 
 ID3D11BlendState* Transparency;
 ID3D11RasterizerState* CCWcullMode;
 ID3D11RasterizerState* CWcullMode;
+ID3D11RasterizerState* noCull;
+
 
 
 XMMATRIX WVP;
@@ -327,6 +329,7 @@ void CleanD3D() {
     Transparency->Release();
     CCWcullMode->Release();
     CWcullMode->Release();
+    noCull->Release();
 }
 
 // this is the function used to render a single frame
@@ -341,41 +344,16 @@ void RenderFrame(void) {
     float blendFactor[] = {0.75f, 0.75f, 0.75f, 1.0f};
 
     devcon->OMSetBlendState(0, 0, 0xffffffff);
+    devcon->RSSetState(NULL);
 
     //Render opaque objects here//
 
     //Now for transparent objects
 
-    devcon->OMSetBlendState(Transparency, blendFactor, 0xffffffff);
 
     //Figure out which cube is further to render first, as we want to blend the closer on top of the further one
 
-    XMVECTOR cubePos = DirectX::XMVectorZero();
-
-    cubePos = DirectX::XMVector3TransformCoord(cubePos, cube1World);
-
-    float distX = DirectX::XMVectorGetX(cubePos) - DirectX::XMVectorGetX(camPosition);
-    float distY = DirectX::XMVectorGetY(cubePos) - DirectX::XMVectorGetY(camPosition);
-    float distZ = DirectX::XMVectorGetZ(cubePos) - DirectX::XMVectorGetZ(camPosition);
-
-    float cube1Dist = distX*distX + distY*distY + distZ*distZ;
-
-    cubePos = DirectX::XMVectorZero();
-
-    cubePos = DirectX::XMVector3TransformCoord(cubePos, cube2World);
-
-    distX = DirectX::XMVectorGetX(cubePos) - DirectX::XMVectorGetX(camPosition);
-    distY = DirectX::XMVectorGetY(cubePos) - DirectX::XMVectorGetY(camPosition);
-    distZ = DirectX::XMVectorGetZ(cubePos) - DirectX::XMVectorGetZ(camPosition);
-
-    float cube2Dist = distX*distX + distY*distY + distZ*distZ;
-
-    if(cube1Dist < cube2Dist)
-    {
-        XMMATRIX tempMatrix = cube1World;
-        cube1World = cube2World;
-        cube2World = tempMatrix;
-    }
+    devcon->RSSetState(noCull);
 
     //Setup view
 
@@ -388,13 +366,8 @@ void RenderFrame(void) {
         devcon->PSSetShaderResources( 0, 1, &CubesTexture );
         devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
 
-        //Counter clockwise culling first because we need the back side of
-        //the cube to be rendered first, so the front side can blend with it
-        devcon->RSSetState(CCWcullMode);
+
         //Draw the first cube
-        devcon->DrawIndexed( 36, 0, 0 );
-        //Now the other side
-        devcon->RSSetState(CWcullMode);
         devcon->DrawIndexed( 36, 0, 0 );
 
         // printf("Draw\n");
@@ -406,12 +379,10 @@ void RenderFrame(void) {
         devcon->PSSetShaderResources( 0, 1, &CubesTexture );
         devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
 
-        //Draw the second cube
-        devcon->RSSetState(CCWcullMode);
-        devcon->DrawIndexed( 36, 0, 0 );
-        devcon->RSSetState(CWcullMode);
         devcon->DrawIndexed( 36, 0, 0 );
 
+    //Draw objects with no culling
+    
 
     // switch the back buffer and the front buffer
     swapchain->Present(0, 0);
@@ -503,6 +474,13 @@ void InitPipeline()
 
     cmdesc.FrontCounterClockwise = false;
     dev->CreateRasterizerState(&cmdesc, &CWcullMode);
+
+    D3D11_RASTERIZER_DESC rastDesc;
+    ZeroMemory(&rastDesc, sizeof(D3D11_RASTERIZER_DESC));
+    rastDesc.FillMode = D3D11_FILL_SOLID;
+    rastDesc.CullMode = D3D11_CULL_NONE;
+
+    dev->CreateRasterizerState(&rastDesc, &noCull);
 }
 
 void InitGraphics() {
@@ -643,16 +621,18 @@ void InitGraphics() {
 
     dev->CreateBuffer(&cbbd, NULL, &cbPerObjectBuffer);
 
-    #ifdef WIREFRAME
     //Rasterizer Stage
     D3D11_RASTERIZER_DESC wfdesc;
     ZeroMemory(&wfdesc, sizeof(D3D11_RASTERIZER_DESC));
     wfdesc.FillMode = D3D11_FILL_WIREFRAME;
     wfdesc.CullMode = D3D11_CULL_NONE;
     dev->CreateRasterizerState(&wfdesc, &WireFrame);
+    #ifdef WIREFRAME
+    
+    devcon->RSSetState(WireFrame);
     #endif
 
-    devcon->RSSetState(WireFrame);
+    
 
    //Setup camera
     camPosition = XMVectorSet( 0.0f, 3.0f, -8.0f, 0.0f );
@@ -666,7 +646,7 @@ void InitGraphics() {
     //Load the texture
     // D3DX11CreateShaderResourceViewFromFile( dev, L"braynzar.jpg", NULL, NULL, &CubesTexture, NULL );
     // LoadFromWICFile(L"resc/monkey.jpg",NULL, );
-    CreateWICTextureFromFile(dev, devcon, L"resc/monkey.jpg", NULL, &CubesTexture);
+    CreateWICTextureFromFile(dev, devcon, L"resc/transmonkey.png", NULL, &CubesTexture);
     // CreateShaderResourceView();
 
     D3D11_SAMPLER_DESC sampDesc;
