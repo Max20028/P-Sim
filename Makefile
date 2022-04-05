@@ -8,10 +8,10 @@
 #  C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um
 
 CC = g++
-CFLAGS  = -g -std=c++17 -municode
+CFLAGS  = -g -std=c++17 -municode 
 # LIBFLAGS = -LC:\\msys64\\mingw64\\x86_64-w64-mingw32\\lib -ld3d11 -ld3dx11 -ld3dx10 -ld3dcompiler
-LIBFLAGS = -L"C:\Program Files (x86)\Windows Kits\10\Lib\10.0.20348.0\um\x64" -ld3d11 -ld3dx11 -ld3dx10 -ld3dcompiler
-# HEADFLAGS = -I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um"
+LIBFLAGS = -L"C:\Program Files (x86)\Windows Kits\10\Lib\10.0.20348.0\um\x64" -ld3d11 -ld3dx11 -ld3dx10 -ld3dcompiler -luuid -lole32 -loleaut32
+HEADFLAGS = -I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um"
 
 RM = del /f
 
@@ -19,12 +19,16 @@ all: output
 debug: CFLAGS += -DDEBUG
 debug: output
 
-output:  main
-	$(CC) $(CFLAGS) -o output my_window.o $(LIBFLAGS)
+output:  main WICTextureLoader
+	$(CC) $(CFLAGS) -o output my_window.o WicTextureLoader.o $(LIBFLAGS)
 
 
 main:  
 	$(CC) $(CFLAGS) -c my_window.cpp
+
+WICTextureLoader:
+	$(CC) $(CFLAGS) -c "headers\WicTextureLoader.cpp"
+
 	
 
 

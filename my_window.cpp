@@ -13,12 +13,18 @@
 // include the basic windows header files and the Direct3D header files
 #include <windows.h>
 #include <windowsx.h>
+
 #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\d3d11.h>
 #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\directxmath.h>
+
+#include "headers/WICTextureLoader.h"
+
 // #include <xnamath.h>
-// #include <d3dx11.h>
+// #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\d3dx11.h>
 // #include <d3dx10.h>
 #include <d3dcompiler.h>    //Shader compiler
+// #include <C:\Users\tpbur\Documents\GitHub\ThirdParty\DirectXTK\Inc\WICTextureLoader.h>
+// #include <C:\Users\tpbur\Documents\GitHub\ThirdParty\DirectXTex\WICTextureLoader\WICTextureLoader11.h>
 
 
 // include the Direct3D Library file
@@ -46,10 +52,15 @@ ID3D11PixelShader *pPS;     // the pixel shader
 ID3D11InputLayout *pLayout; // GPU Input Layout
 ID3D11Buffer* squareIndexBuffer;
 ID3D11Buffer* squareVertBuffer;
-ID3D11DepthStencilView* depthStencilView;
-ID3D11Texture2D* depthStencilBuffer;
-ID3D11Buffer* cbPerObjectBuffer;
-ID3D11RasterizerState* WireFrame;
+ID3D11DepthStencilView* depthStencilView; //Similar to below, not 100% sure the difference
+ID3D11Texture2D* depthStencilBuffer; //Stores the depth buffer, essentially all the depths across the screen I think
+ID3D11Buffer* cbPerObjectBuffer; //Per object buffer sent to vs?
+ID3D11RasterizerState* WireFrame; //Rasterizer state that saves how to render things
+ID3D11ShaderResourceView* CubesTexture; //Stores the texture the cube
+ID3D11SamplerState* CubesTexSamplerState; //Stores the sampler, I think this is how the ps reads the file???
+ID3D11BlendState* Transparency;
+ID3D11RasterizerState* CCWcullMode;
+ID3D11RasterizerState* CWcullMode;
 
 
 XMMATRIX WVP;
@@ -80,11 +91,11 @@ struct Vertex    //Overloaded Vertex Structure
 {
     Vertex(){}
     Vertex(float x, float y, float z,
-        float cr, float cg, float cb, float ca)
-        : pos(x,y,z), color(cr, cg, cb, ca){}
+        float u, float v)
+        : pos(x,y,z), texcoord(u, v){}
 
     XMFLOAT3 pos;
-    XMFLOAT4 color;
+    XMFLOAT2 texcoord;
 };
 
 struct cbPerObject
@@ -295,7 +306,7 @@ void InitD3D(HWND hWnd)
 
 // this is the function that cleans up Direct3D and COM
 void CleanD3D() {
-
+    printf("Cleanup D3D\n");
     swapchain->SetFullscreenState(FALSE, NULL);    // switch to windowed mode
 
     // close and release all existing COM objects
@@ -313,6 +324,9 @@ void CleanD3D() {
     depthStencilBuffer->Release();
     cbPerObjectBuffer->Release();
     WireFrame->Release();
+    Transparency->Release();
+    CCWcullMode->Release();
+    CWcullMode->Release();
 }
 
 // this is the function used to render a single frame
@@ -324,6 +338,45 @@ void RenderFrame(void) {
     devcon->ClearRenderTargetView(backbuffer, color);
     devcon->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 1.0f, 0);
 
+    float blendFactor[] = {0.75f, 0.75f, 0.75f, 1.0f};
+
+    devcon->OMSetBlendState(0, 0, 0xffffffff);
+
+    //Render opaque objects here//
+
+    //Now for transparent objects
+
+    devcon->OMSetBlendState(Transparency, blendFactor, 0xffffffff);
+
+    //Figure out which cube is further to render first, as we want to blend the closer on top of the further one
+
+    XMVECTOR cubePos = DirectX::XMVectorZero();
+
+    cubePos = DirectX::XMVector3TransformCoord(cubePos, cube1World);
+
+    float distX = DirectX::XMVectorGetX(cubePos) - DirectX::XMVectorGetX(camPosition);
+    float distY = DirectX::XMVectorGetY(cubePos) - DirectX::XMVectorGetY(camPosition);
+    float distZ = DirectX::XMVectorGetZ(cubePos) - DirectX::XMVectorGetZ(camPosition);
+
+    float cube1Dist = distX*distX + distY*distY + distZ*distZ;
+
+    cubePos = DirectX::XMVectorZero();
+
+    cubePos = DirectX::XMVector3TransformCoord(cubePos, cube2World);
+
+    distX = DirectX::XMVectorGetX(cubePos) - DirectX::XMVectorGetX(camPosition);
+    distY = DirectX::XMVectorGetY(cubePos) - DirectX::XMVectorGetY(camPosition);
+    distZ = DirectX::XMVectorGetZ(cubePos) - DirectX::XMVectorGetZ(camPosition);
+
+    float cube2Dist = distX*distX + distY*distY + distZ*distZ;
+
+    if(cube1Dist < cube2Dist)
+    {
+        XMMATRIX tempMatrix = cube1World;
+        cube1World = cube2World;
+        cube2World = tempMatrix;
+    }
+
     //Setup view
 
         //Set the WVP matrix and send it to the constant buffer in effect file
@@ -332,16 +385,33 @@ void RenderFrame(void) {
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
 
+        devcon->PSSetShaderResources( 0, 1, &CubesTexture );
+        devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
+
+        //Counter clockwise culling first because we need the back side of
+        //the cube to be rendered first, so the front side can blend with it
+        devcon->RSSetState(CCWcullMode);
         //Draw the first cube
         devcon->DrawIndexed( 36, 0, 0 );
+        //Now the other side
+        devcon->RSSetState(CWcullMode);
+        devcon->DrawIndexed( 36, 0, 0 );
+
         // printf("Draw\n");
         WVP = cube2World * camView * camProjection;
         cbPerObj.WVP = XMMatrixTranspose(WVP);    
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
 
+        devcon->PSSetShaderResources( 0, 1, &CubesTexture );
+        devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
+
         //Draw the second cube
+        devcon->RSSetState(CCWcullMode);
         devcon->DrawIndexed( 36, 0, 0 );
+        devcon->RSSetState(CWcullMode);
+        devcon->DrawIndexed( 36, 0, 0 );
+
 
     // switch the back buffer and the front buffer
     swapchain->Present(0, 0);
@@ -373,7 +443,7 @@ void InitPipeline()
     D3D11_INPUT_ELEMENT_DESC ied[] =
     {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
 
     dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
@@ -399,6 +469,40 @@ void InitPipeline()
 
     dev->CreateTexture2D(&depthStencilDesc, NULL, &depthStencilBuffer);
     dev->CreateDepthStencilView(depthStencilBuffer, NULL, &depthStencilView);
+
+    //Create blending description for transparency
+
+    D3D11_BLEND_DESC blendDesc;
+    ZeroMemory( &blendDesc, sizeof(blendDesc) );
+
+    D3D11_RENDER_TARGET_BLEND_DESC rtbd;
+    ZeroMemory( &rtbd, sizeof(rtbd) );
+
+    rtbd.BlendEnable             = true;
+    rtbd.SrcBlend                 = D3D11_BLEND_SRC_COLOR;
+    rtbd.DestBlend                 = D3D11_BLEND_BLEND_FACTOR;
+    rtbd.BlendOp                 = D3D11_BLEND_OP_ADD;
+    rtbd.SrcBlendAlpha             = D3D11_BLEND_ONE;
+    rtbd.DestBlendAlpha             = D3D11_BLEND_ZERO;
+    rtbd.BlendOpAlpha             = D3D11_BLEND_OP_ADD;
+    rtbd.RenderTargetWriteMask     = D3D10_COLOR_WRITE_ENABLE_ALL;
+
+    blendDesc.AlphaToCoverageEnable = false;
+    blendDesc.RenderTarget[0] = rtbd;
+
+    dev->CreateBlendState(&blendDesc, &Transparency);
+
+    D3D11_RASTERIZER_DESC cmdesc;
+    ZeroMemory(&cmdesc, sizeof(D3D11_RASTERIZER_DESC));
+
+    cmdesc.FillMode = D3D11_FILL_SOLID;
+    cmdesc.CullMode = D3D11_CULL_BACK;
+
+    cmdesc.FrontCounterClockwise = true;
+    dev->CreateRasterizerState(&cmdesc, &CCWcullMode);
+
+    cmdesc.FrontCounterClockwise = false;
+    dev->CreateRasterizerState(&cmdesc, &CWcullMode);
 }
 
 void InitGraphics() {
@@ -423,42 +527,69 @@ void InitGraphics() {
 
     // CUBES
     Vertex v[] =
-    {
-        Vertex( -1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
-        Vertex( -1.0f, +1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f ),
-        Vertex( +1.0f, +1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f ),
-        Vertex( +1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f ),
-        Vertex( -1.0f, -1.0f, +1.0f, 0.0f, 1.0f, 1.0f, 1.0f ),
-        Vertex( -1.0f, +1.0f, +1.0f, 1.0f, 1.0f, 1.0f, 1.0f ),
-        Vertex( +1.0f, +1.0f, +1.0f, 1.0f, 0.0f, 1.0f, 1.0f ),
-        Vertex( +1.0f, -1.0f, +1.0f, 1.0f, 0.0f, 0.0f, 1.0f ),
-    };
-
-    DWORD indices[] = {
-        // front face
-        0, 1, 2,
-        0, 2, 3,
-
-        // back face
-        4, 6, 5,
-        4, 7, 6,
-
-        // left face
-        4, 5, 1,
-        4, 1, 0,
-
-        // right face
-        3, 2, 6,
-        3, 6, 7,
-
-        // top face
-        1, 5, 6,
-        1, 6, 2,
-
-        // bottom face
-        4, 0, 3, 
-        4, 3, 7
-    };
+        {
+            // Front Face
+            Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f),
+            Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f),
+            Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f),
+            Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f),
+    
+            // Back Face
+            Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f),
+            Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f),
+            Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f),
+            Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f),
+    
+            // Top Face
+            Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f),
+            Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f),
+            Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f),
+            Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f),
+    
+            // Bottom Face
+            Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f),
+            Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f),
+            Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f),
+            Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f),
+    
+            // Left Face
+            Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f),
+            Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f),
+            Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f),
+            Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f),
+    
+            // Right Face
+            Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f),
+            Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f),
+            Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f),
+            Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f),
+        };
+    
+        DWORD indices[] = {
+            // Front Face
+            0,  1,  2,
+            0,  2,  3,
+    
+            // Back Face
+            4,  5,  6,
+            4,  6,  7,
+    
+            // Top Face
+            8,  9, 10,
+            8, 10, 11,
+    
+            // Bottom Face
+            12, 13, 14,
+            12, 14, 15,
+    
+            // Left Face
+            16, 17, 18,
+            16, 18, 19,
+    
+            // Right Face
+            20, 21, 22,
+            20, 22, 23
+        };
 
     //Square Index Buffer
     D3D11_BUFFER_DESC indexBufferDesc;
@@ -483,7 +614,7 @@ void InitGraphics() {
     ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
 
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    vertexBufferDesc.ByteWidth = sizeof( Vertex ) * 8;
+    vertexBufferDesc.ByteWidth = sizeof( Vertex ) * 24;
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.MiscFlags = 0;
@@ -531,5 +662,23 @@ void InitGraphics() {
     camView = XMMatrixLookAtLH( camPosition, camTarget, camUp );
 
     camProjection = XMMatrixPerspectiveFovLH( 0.4f*3.14f, (float)SCREEN_WIDTH/SCREEN_HEIGHT, 1.0f, 1000.0f);
+
+    //Load the texture
+    // D3DX11CreateShaderResourceViewFromFile( dev, L"braynzar.jpg", NULL, NULL, &CubesTexture, NULL );
+    // LoadFromWICFile(L"resc/monkey.jpg",NULL, );
+    CreateWICTextureFromFile(dev, devcon, L"resc/monkey.jpg", NULL, &CubesTexture);
+    // CreateShaderResourceView();
+
+    D3D11_SAMPLER_DESC sampDesc;
+    ZeroMemory( &sampDesc, sizeof(sampDesc) );
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sampDesc.MinLOD = 0;
+    sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    dev->CreateSamplerState( &sampDesc, &CubesTexSamplerState );
 }
 
