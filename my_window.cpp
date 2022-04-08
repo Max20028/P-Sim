@@ -549,7 +549,6 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
             vertvec.push_back(Vertex(a,b,c,1.0f,1.0f,1.0f,1.0f,0,0,0));
         } else if(strcmp(token, "f") == 0) {
             token = strtok(NULL, " ");
-                char* ptok = strtok(token, "//");
             int a = atoi(token);
             token = strtok(NULL, " ");
             int b = atoi(token);
