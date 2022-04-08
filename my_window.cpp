@@ -16,6 +16,9 @@
 
 #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\d3d11.h>
 #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\directxmath.h>
+#include <dwrite.h>
+#include <d2d1_1.h>
+// #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\dxgi.h>
 
 #include "headers/WICTextureLoader.h"
 
@@ -43,6 +46,8 @@ using namespace DirectX;
 
 // global declarations
 IDXGISwapChain *swapchain;             // the pointer to the swap chain interface
+IDXGIFactory *dxgifactory;
+ID2D1Factory *d2dfactory;
 ID3D11Device *dev;                     // the pointer to our Direct3D device interface
 ID3D11DeviceContext *devcon;           // the pointer to our Direct3D device context
 ID3D11RenderTargetView *backbuffer;    // global declaration
@@ -61,6 +66,10 @@ ID3D11SamplerState* CubesTexSamplerState; //Stores the sampler, I think this is 
 ID3D11BlendState* Transparency;
 ID3D11RasterizerState* CCWcullMode;
 ID3D11RasterizerState* CWcullMode;
+ID2D1RenderTarget* d2drendertarget;
+IDWriteFactory* dwritefactory;
+IDWriteTextFormat* dwritetextformat;
+ID2D1SolidColorBrush* blackbrush;
 
 
 XMMATRIX WVP;
@@ -155,7 +164,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     // Run the message loop.
 
-    printf("Initialization Complete. Starting Message Loop");
+    printf("Initialization Complete. Starting Message Loop\n");
     MSG msg = { };
     while (true) {
         //Message Loop
@@ -195,6 +204,29 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+void drawstuff() {
+        static const WCHAR sc_helloWorld[] = L"Hello, World!";
+
+        // Retrieve the size of the render target.
+        D2D1_SIZE_F renderTargetSize = d2drendertarget->GetSize();
+
+        d2drendertarget->BeginDraw();
+
+        d2drendertarget->SetTransform(D2D1::Matrix3x2F::Identity());
+
+        // d2drendertarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+
+        d2drendertarget->DrawText(
+            sc_helloWorld,
+            ARRAYSIZE(sc_helloWorld) - 1,
+            dwritetextformat,
+            D2D1::RectF(0, 0, renderTargetSize.width, renderTargetSize.height),
+            blackbrush
+            );
+
+        d2drendertarget->EndDraw();
+}
+
 
 void UpdateScene(){
     //Keep the cubes rotating
@@ -228,6 +260,9 @@ void UpdateScene(){
 void InitD3D(HWND hWnd)
 {
     printf("InitD3D\n");
+
+
+
     //Describe our SwapChain Buffer
     DXGI_MODE_DESC bufferDesc;
 
@@ -237,7 +272,7 @@ void InitD3D(HWND hWnd)
     bufferDesc.Height = SCREEN_HEIGHT;
     bufferDesc.RefreshRate.Numerator = 60;
     bufferDesc.RefreshRate.Denominator = 1;
-    bufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    bufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     bufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
     bufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     // create a struct to hold information about the swap chain
@@ -260,7 +295,7 @@ void InitD3D(HWND hWnd)
     D3D11CreateDeviceAndSwapChain(NULL,
                                   D3D_DRIVER_TYPE_HARDWARE,
                                   NULL,
-                                  0,
+                                  D3D11_CREATE_DEVICE_BGRA_SUPPORT,
                                   NULL,
                                   0,
                                   D3D11_SDK_VERSION,
@@ -278,7 +313,59 @@ void InitD3D(HWND hWnd)
 
     // use the back buffer address to create the render target
     dev->CreateRenderTargetView(pBackBuffer, NULL, &backbuffer);
+
+    D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2dfactory);
+
+    //Create the DXGI Surface Render Target.
+    FLOAT dpiX;
+    FLOAT dpiY;
+    d2dfactory->GetDesktopDpi(&dpiX, &dpiY);
+
+
+    D2D1_RENDER_TARGET_PROPERTIES props =
+        D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_HARDWARE,
+            D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED),
+            dpiX,
+            dpiY
+            );
+    printf("Here\n");
+    IDXGISurface1* surface;
+    HRESULT hb = swapchain->GetBuffer(0, IID_IDXGISurface1, (void**)&surface);
+    if(!SUCCEEDED(hb)) {
+        printf("uh oh\n");
+        printf("%p\n", hb);
+    }
+    printf("Here\n");
+
+    //Create the d2d render target
+    HRESULT hr = d2dfactory->CreateDxgiSurfaceRenderTarget(surface, &props, &d2drendertarget);
+    if(!SUCCEEDED(hr)) {
+        printf("uh oh in the dxgisurfacerendertarget\n");
+        printf("%p\n", hr);
+    }
+
+    surface->Release();
     pBackBuffer->Release();
+
+    printf("Here\n");
+    DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, IID_IDWriteFactory, reinterpret_cast<IUnknown **>(&dwritefactory));
+printf("Here\n");
+    dwritefactory->CreateTextFormat(L"Verdana", //Font name
+            NULL,
+            DWRITE_FONT_WEIGHT_NORMAL,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            24, //Font Size
+            L"", //locale
+            &dwritetextformat
+            );
+    printf("Here\n");
+    d2drendertarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), &blackbrush);
+printf("Here\n");
+    dwritetextformat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_JUSTIFIED);
+        
+    dwritetextformat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
 // -----------------
 
@@ -327,6 +414,12 @@ void CleanD3D() {
     Transparency->Release();
     CCWcullMode->Release();
     CWcullMode->Release();
+    dxgifactory->Release();
+    d2dfactory->Release();
+    d2drendertarget->Release();
+    dwritefactory->Release();
+    dwritetextformat->Release();
+    blackbrush->Release();
 }
 
 // this is the function used to render a single frame
@@ -414,6 +507,7 @@ void RenderFrame(void) {
 
 
     // switch the back buffer and the front buffer
+    drawstuff();
     swapchain->Present(0, 0);
 }
 
