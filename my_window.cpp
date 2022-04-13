@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <initguid.h> //Make COM happy with mingw
+#include <sstream>
 
 // include the basic windows header files and the Direct3D header files
 #include <windows.h>
@@ -88,13 +89,30 @@ XMMATRIX Scale;
 XMMATRIX Translation;
 float rot = 0.01f;
 
+//------------------------
+//Time constants
+double countsPerSecond = 0.0;
+__int64 CounterStart = 0;
+
+int frameCount = 0;
+int fps = 0;
+
+__int64 frameTimeOld = 0;
+double frameTime;
+//-------------------------
+
 // function prototypes
 void InitD3D(HWND hWnd);     // sets up and initializes Direct3D
 void CleanD3D(void);         // closes Direct3D and releases memory
 void RenderFrame();
 void InitPipeline();
 void InitGraphics();
-void UpdateScene();
+void UpdateScene(double time);
+void drawstuff(std::wstring text, int inInt);
+
+void StartTimer();
+double GetTime();
+double GetFrameTime();
 
 struct Vertex    //Overloaded Vertex Structure
 {
@@ -181,7 +199,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
         //Run update code here
         //...
-        UpdateScene();
+        frameCount++;
+        if(GetTime() > 1.0f) {
+            fps = frameCount;
+            frameCount = 0;
+            StartTimer();
+        }
+        frameTime = GetFrameTime();
+        UpdateScene(frameTime);
         RenderFrame();
     }
 
@@ -204,8 +229,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-void drawstuff() {
+void drawstuff(std::wstring text, int inInt) {
         static const WCHAR sc_helloWorld[] = L"Hello, World!";
+        std::wostringstream printString;
+        printString << text << inInt;
+        std::wstring printText = printString.str();
 
         // Retrieve the size of the render target.
         D2D1_SIZE_F renderTargetSize = d2drendertarget->GetSize();
@@ -217,8 +245,8 @@ void drawstuff() {
         // d2drendertarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
         d2drendertarget->DrawText(
-            sc_helloWorld,
-            ARRAYSIZE(sc_helloWorld) - 1,
+            printText.c_str(),
+            wcslen(printText.c_str()),
             dwritetextformat,
             D2D1::RectF(0, 0, renderTargetSize.width, renderTargetSize.height),
             blackbrush
@@ -228,9 +256,9 @@ void drawstuff() {
 }
 
 
-void UpdateScene(){
+void UpdateScene(double time){
     //Keep the cubes rotating
-    rot += .0005f;
+    rot += 1.0f * time;
     if(rot > 6.28f)
         rot = 0.0f;
 
@@ -272,7 +300,7 @@ void InitD3D(HWND hWnd)
     bufferDesc.Height = SCREEN_HEIGHT;
     bufferDesc.RefreshRate.Numerator = 60;
     bufferDesc.RefreshRate.Denominator = 1;
-    bufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    bufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; //Must be bgra for d2d compatibility
     bufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
     bufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     // create a struct to hold information about the swap chain
@@ -295,7 +323,7 @@ void InitD3D(HWND hWnd)
     D3D11CreateDeviceAndSwapChain(NULL,
                                   D3D_DRIVER_TYPE_HARDWARE,
                                   NULL,
-                                  D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                  D3D11_CREATE_DEVICE_BGRA_SUPPORT, //Gives d2d support
                                   NULL,
                                   0,
                                   D3D11_SDK_VERSION,
@@ -507,7 +535,7 @@ void RenderFrame(void) {
 
 
     // switch the back buffer and the front buffer
-    drawstuff();
+    drawstuff(L"FPS: ", fps);
     swapchain->Present(0, 0);
 }
 
@@ -776,3 +804,29 @@ void InitGraphics() {
     dev->CreateSamplerState( &sampDesc, &CubesTexSamplerState );
 }
 
+void StartTimer() {
+    LARGE_INTEGER frequencyCount;
+    QueryPerformanceFrequency(&frequencyCount);
+
+    countsPerSecond = double(frequencyCount.QuadPart);
+
+    QueryPerformanceCounter(&frequencyCount);
+    CounterStart = frequencyCount.QuadPart;
+}
+double GetTime() {
+    LARGE_INTEGER currentTime;
+    QueryPerformanceCounter(&currentTime);
+    return double(currentTime.QuadPart-CounterStart)/countsPerSecond;
+}
+double GetFrameTime() {
+    LARGE_INTEGER currentTime;
+    __int64 tickCount;
+    QueryPerformanceCounter(&currentTime);
+
+    tickCount = currentTime.QuadPart-frameTimeOld;
+    frameTimeOld = currentTime.QuadPart;
+
+    if(tickCount < 0.0f) tickCount = 0.0f;
+
+    return float(tickCount)/countsPerSecond;
+}
