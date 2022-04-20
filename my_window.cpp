@@ -71,6 +71,7 @@ ID2D1RenderTarget* d2drendertarget;
 IDWriteFactory* dwritefactory;
 IDWriteTextFormat* dwritetextformat;
 ID2D1SolidColorBrush* blackbrush;
+ID3D11Buffer* cbPerFrameBuffer;
 
 
 XMMATRIX WVP;
@@ -118,19 +119,44 @@ struct Vertex    //Overloaded Vertex Structure
 {
     Vertex(){}
     Vertex(float x, float y, float z,
-        float u, float v)
-        : pos(x,y,z), texcoord(u, v){}
+        float u, float v,
+        float nx, float ny, float nz)
+        : pos(x,y,z), texcoord(u, v), normal(nx, ny, nz){}
 
     XMFLOAT3 pos;
     XMFLOAT2 texcoord;
+    XMFLOAT3 normal;
 };
 
 struct cbPerObject
 {
     XMMATRIX  WVP;
+    XMMATRIX  World;
 };
 
 cbPerObject cbPerObj;
+
+//Lights stuff
+struct Light
+{
+    Light()
+    {
+        ZeroMemory(this, sizeof(Light));
+    }
+    XMFLOAT3 dir;
+    float pad;
+    XMFLOAT4 ambient;
+    XMFLOAT4 diffuse;
+};
+
+Light light;
+
+struct cbPerFrame
+{
+    Light  light;
+};
+
+cbPerFrame constbuffPerFrame;
 
 
 // the WindowProc function prototype
@@ -357,14 +383,14 @@ void InitD3D(HWND hWnd)
             dpiX,
             dpiY
             );
-    printf("Here\n");
+    // printf("Here\n");
     IDXGISurface1* surface;
     HRESULT hb = swapchain->GetBuffer(0, IID_IDXGISurface1, (void**)&surface);
     if(!SUCCEEDED(hb)) {
         printf("uh oh\n");
         printf("%p\n", hb);
     }
-    printf("Here\n");
+    // printf("Here\n");
 
     //Create the d2d render target
     HRESULT hr = d2dfactory->CreateDxgiSurfaceRenderTarget(surface, &props, &d2drendertarget);
@@ -376,9 +402,9 @@ void InitD3D(HWND hWnd)
     surface->Release();
     pBackBuffer->Release();
 
-    printf("Here\n");
+    // printf("Here\n");
     DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, IID_IDWriteFactory, reinterpret_cast<IUnknown **>(&dwritefactory));
-printf("Here\n");
+// printf("Here\n");
     dwritefactory->CreateTextFormat(L"Verdana", //Font name
             NULL,
             DWRITE_FONT_WEIGHT_NORMAL,
@@ -388,9 +414,9 @@ printf("Here\n");
             L"", //locale
             &dwritetextformat
             );
-    printf("Here\n");
+    // printf("Here\n");
     d2drendertarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), &blackbrush);
-printf("Here\n");
+// printf("Here\n");
     dwritetextformat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_JUSTIFIED);
         
     dwritetextformat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
@@ -448,6 +474,8 @@ void CleanD3D() {
     dwritefactory->Release();
     dwritetextformat->Release();
     blackbrush->Release();
+    cbPerFrameBuffer->Release();
+
 }
 
 // this is the function used to render a single frame
@@ -455,6 +483,16 @@ void RenderFrame(void) {
     // clear the back buffer to a deep blue
     // devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(0.0f, 0.2f, 0.4f, 1.0f)); //This is the tutorial version, requires d3dx
     // float color[4] = {0.0f, 0.2f, 0.4f, 1.0f};
+
+    //Set the light
+    constbuffPerFrame.light = light;
+    devcon->UpdateSubresource( cbPerFrameBuffer, 0, NULL, &constbuffPerFrame, 0, 0 );
+    devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer); 
+
+    //Reset the V and P Shaders
+    devcon->VSSetShader(pVS, 0, 0);
+    devcon->PSSetShader(pPS, 0, 0);   
+
     float color[4] = {0.5f,0.5f,0.5f,1.0f};
     devcon->ClearRenderTargetView(backbuffer, color);
     devcon->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 1.0f, 0);
@@ -467,7 +505,7 @@ void RenderFrame(void) {
 
     //Now for transparent objects
 
-    devcon->OMSetBlendState(Transparency, blendFactor, 0xffffffff);
+    // devcon->OMSetBlendState(Transparency, blendFactor, 0xffffffff);
 
     //Figure out which cube is further to render first, as we want to blend the closer on top of the further one
 
@@ -502,6 +540,7 @@ void RenderFrame(void) {
 
         //Set the WVP matrix and send it to the constant buffer in effect file
         WVP = cube1World * camView * camProjection;
+        cbPerObj.World = XMMatrixTranspose(cube1World);
         cbPerObj.WVP = XMMatrixTranspose(WVP);    
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
@@ -511,15 +550,16 @@ void RenderFrame(void) {
 
         //Counter clockwise culling first because we need the back side of
         //the cube to be rendered first, so the front side can blend with it
-        devcon->RSSetState(CCWcullMode);
+        // devcon->RSSetState(CCWcullMode);
         //Draw the first cube
-        devcon->DrawIndexed( 36, 0, 0 );
+        // devcon->DrawIndexed( 36, 0, 0 );
         //Now the other side
         devcon->RSSetState(CWcullMode);
         devcon->DrawIndexed( 36, 0, 0 );
 
         // printf("Draw\n");
         WVP = cube2World * camView * camProjection;
+        cbPerObj.World = XMMatrixTranspose(cube2World);
         cbPerObj.WVP = XMMatrixTranspose(WVP);    
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
@@ -528,8 +568,8 @@ void RenderFrame(void) {
         devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
 
         //Draw the second cube
-        devcon->RSSetState(CCWcullMode);
-        devcon->DrawIndexed( 36, 0, 0 );
+        // devcon->RSSetState(CCWcullMode);
+        // devcon->DrawIndexed( 36, 0, 0 );
         devcon->RSSetState(CWcullMode);
         devcon->DrawIndexed( 36, 0, 0 );
 
@@ -548,29 +588,30 @@ void InitPipeline()
     // D3DX11CompileFromFile(L"shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, 0, &PS, 0, 0);
     D3DCompileFromFile(L"myshader.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VShader", "vs_4_0", 0, 0,&VS, 0);
     D3DCompileFromFile(L"myshader.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PShader", "ps_4_0", 0, 0,&PS, 0);
-
+    printf("L");
 
     // encapsulate both shaders into shader objects
     dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL, &pVS);
     dev->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), NULL, &pPS);
-
+    printf("O");
 
     // set the shader objects
     devcon->VSSetShader(pVS, 0, 0);
     devcon->PSSetShader(pPS, 0, 0);
     
 
-
+    printf("B");
     // create the input layout object
     D3D11_INPUT_ELEMENT_DESC ied[] =
     {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL",     0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
     };
 
-    dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
+    dev->CreateInputLayout(ied, ARRAYSIZE(ied), VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
     devcon->IASetInputLayout(pLayout);
-
+    printf("A\n");
     // select which primtive type we are using
     devcon->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -629,63 +670,51 @@ void InitPipeline()
 
 void InitGraphics() {
     printf("InitGraphics\n");
-    //The Triangle
-    // VERTEX triangle[] = {
-    //     {0.0f, 0.5f, 0.0f, {1,0,0,1}},
-    //     {0.45f, -0.5f, 0.0f, {0,1,0,1}},
-    //     {-0.45f, -0.5f, 0.0f, {0,0,1,1}}
-    // };
-    // The Square
-    // VERTEX v[] = {
-    //     { -0.5f, -0.5f, 0.5f, {1.0f, 0.0f, 0.0f, 1.0f} },
-    //     { -0.5f,  0.5f, 0.5f, {0.0f, 1.0f, 0.0f, 1.0f} },
-    //     {  0.5f,  0.5f, 0.5f, {0.0f, 0.0f, 1.0f, 1.0f} },
-    //     {  0.5f, -0.5f, 0.5f, {0.0f, 1.0f, 0.0f, 1.0f} },
-    // };
-    // DWORD indices[] = {
-    //     0, 1, 2,
-    //     0, 2, 3,
-    // };
+
+    //Configure the directional light
+    light.dir = XMFLOAT3(0.25f, 0.5f, -1.0f);
+    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+    light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     // CUBES
     Vertex v[] =
-        {
-            // Front Face
-            Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f),
-            Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f),
-            Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f),
-            Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f),
-    
-            // Back Face
-            Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f),
-            Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f),
-            Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f),
-            Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f),
-    
-            // Top Face
-            Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f),
-            Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f),
-            Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f),
-            Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f),
-    
-            // Bottom Face
-            Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f),
-            Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f),
-            Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f),
-            Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f),
-    
-            // Left Face
-            Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f),
-            Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f),
-            Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f),
-            Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f),
-    
-            // Right Face
-            Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f),
-            Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f),
-            Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f),
-            Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f),
-        };
+{
+    // Front Face
+    Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f,-1.0f, -1.0f, -1.0f),
+    Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f,-1.0f,  1.0f, -1.0f),
+    Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 1.0f,  1.0f, -1.0f),
+    Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, -1.0f, -1.0f),
+
+    // Back Face
+    Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f,-1.0f, -1.0f, 1.0f),
+    Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 1.0f),
+    Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f),
+    Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f,-1.0f,  1.0f, 1.0f),
+
+    // Top Face
+    Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f,-1.0f, 1.0f, -1.0f),
+    Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f,-1.0f, 1.0f,  1.0f),
+    Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f),
+    Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f),
+
+    // Bottom Face
+    Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f),
+    Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f),
+    Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f, -1.0f,  1.0f),
+    Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f,-1.0f, -1.0f,  1.0f),
+
+    // Left Face
+    Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f,-1.0f, -1.0f,  1.0f),
+    Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f,-1.0f,  1.0f,  1.0f),
+    Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f,-1.0f,  1.0f, -1.0f),
+    Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f),
+
+    // Right Face
+    Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f),
+    Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 1.0f,  1.0f, -1.0f),
+    Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  1.0f,  1.0f),
+    Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, -1.0f,  1.0f),
+};
     
         DWORD indices[] = {
             // Front Face
@@ -764,6 +793,17 @@ void InitGraphics() {
     cbbd.MiscFlags = 0;
 
     dev->CreateBuffer(&cbbd, NULL, &cbPerObjectBuffer);
+
+    //Create perframe buffer
+    ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+
+    cbbd.Usage = D3D11_USAGE_DEFAULT;
+    cbbd.ByteWidth = sizeof(cbPerFrame);
+    cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbbd.CPUAccessFlags = 0;
+    cbbd.MiscFlags = 0;
+
+    dev->CreateBuffer(&cbbd, NULL, &cbPerFrameBuffer);
 
     #ifdef WIREFRAME
     //Rasterizer Stage
