@@ -145,6 +145,10 @@ struct Light
     }
     XMFLOAT3 dir;
     float pad;
+    XMFLOAT3 pos;
+    float range;
+    XMFLOAT3 att;
+    float pad2;
     XMFLOAT4 ambient;
     XMFLOAT4 diffuse;
 };
@@ -497,44 +501,8 @@ void RenderFrame(void) {
     devcon->ClearRenderTargetView(backbuffer, color);
     devcon->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-    float blendFactor[] = {0.75f, 0.75f, 0.75f, 1.0f};
 
     devcon->OMSetBlendState(0, 0, 0xffffffff);
-
-    //Render opaque objects here//
-
-    //Now for transparent objects
-
-    // devcon->OMSetBlendState(Transparency, blendFactor, 0xffffffff);
-
-    //Figure out which cube is further to render first, as we want to blend the closer on top of the further one
-
-    XMVECTOR cubePos = DirectX::XMVectorZero();
-
-    cubePos = DirectX::XMVector3TransformCoord(cubePos, cube1World);
-
-    float distX = DirectX::XMVectorGetX(cubePos) - DirectX::XMVectorGetX(camPosition);
-    float distY = DirectX::XMVectorGetY(cubePos) - DirectX::XMVectorGetY(camPosition);
-    float distZ = DirectX::XMVectorGetZ(cubePos) - DirectX::XMVectorGetZ(camPosition);
-
-    float cube1Dist = distX*distX + distY*distY + distZ*distZ;
-
-    cubePos = DirectX::XMVectorZero();
-
-    cubePos = DirectX::XMVector3TransformCoord(cubePos, cube2World);
-
-    distX = DirectX::XMVectorGetX(cubePos) - DirectX::XMVectorGetX(camPosition);
-    distY = DirectX::XMVectorGetY(cubePos) - DirectX::XMVectorGetY(camPosition);
-    distZ = DirectX::XMVectorGetZ(cubePos) - DirectX::XMVectorGetZ(camPosition);
-
-    float cube2Dist = distX*distX + distY*distY + distZ*distZ;
-
-    if(cube1Dist < cube2Dist)
-    {
-        XMMATRIX tempMatrix = cube1World;
-        cube1World = cube2World;
-        cube2World = tempMatrix;
-    }
 
     //Setup view
 
@@ -556,6 +524,15 @@ void RenderFrame(void) {
         //Now the other side
         devcon->RSSetState(CWcullMode);
         devcon->DrawIndexed( 36, 0, 0 );
+
+
+        XMVECTOR lightVector = XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f );
+
+        lightVector = XMVector3TransformCoord(lightVector,cube1World);
+
+        light.pos.x = XMVectorGetX(lightVector);
+        light.pos.y = XMVectorGetY(lightVector);
+        light.pos.z = XMVectorGetZ(lightVector);
 
         // printf("Draw\n");
         WVP = cube2World * camView * camProjection;
@@ -671,9 +648,11 @@ void InitPipeline()
 void InitGraphics() {
     printf("InitGraphics\n");
 
-    //Configure the directional light
-    light.dir = XMFLOAT3(0.25f, 0.5f, -1.0f);
-    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+    //Configure the point light
+    light.pos = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    light.range = 100.0f;
+    light.att = XMFLOAT3(0.0f, 0.2f, 0.0f);
+    light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
     light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     // CUBES
