@@ -84,12 +84,8 @@ XMVECTOR camTarget;
 XMVECTOR camUp;
 
 XMMATRIX cube1World;
-XMMATRIX cube2World;
 
-XMMATRIX Rotation;
-XMMATRIX Scale;
-XMMATRIX Translation;
-float rot = 0.01f;
+
 
 //------------------------
 //Time constants
@@ -111,6 +107,11 @@ LPDIRECTINPUT8 DirectInput;
 
 //---------------------------
 //Camera Stuff
+
+XMMATRIX Rotation;
+XMMATRIX Scale;
+XMMATRIX Translation;
+
 XMVECTOR DefaultForward = XMVectorSet(0.0f,0.0f,1.0f, 0.0f);
 XMVECTOR DefaultRight = XMVectorSet(1.0f,0.0f,0.0f, 0.0f);
 XMVECTOR camForward = XMVectorSet(0.0f,0.0f,1.0f, 0.0f);
@@ -544,7 +545,9 @@ void RenderFrame(void) {
         //Draw the first cube
         // devcon->DrawIndexed( 36, 0, 0 );
         //Now the other side
+        #ifndef WIREFRAME
         devcon->RSSetState(CCWcullMode);
+        #endif
         devcon->DrawIndexed( 6, 0, 0 );
 
 
