@@ -19,6 +19,7 @@
 #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\directxmath.h>
 #include <dwrite.h>
 #include <d2d1_1.h>
+#include <dinput.h>
 // #include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\dxgi.h>
 
 #include "headers/WICTextureLoader.h"
@@ -101,6 +102,21 @@ int fps = 0;
 __int64 frameTimeOld = 0;
 double frameTime;
 //-------------------------
+//The input stuff
+IDirectInputDevice8* DIKeyboard;
+IDirectInputDevice8* DIMouse;
+
+DIMOUSESTATE mouseLastState;
+LPDIRECTINPUT8 DirectInput;
+
+float rotx = 0;
+float rotz = 0;
+float scaleX = 1.0f;
+float scaleY = 1.0f;
+
+XMMATRIX Rotationx;
+XMMATRIX Rotationz;
+//-------------------------
 
 // function prototypes
 void InitD3D(HWND hWnd);     // sets up and initializes Direct3D
@@ -110,6 +126,8 @@ void InitPipeline();
 void InitGraphics();
 void UpdateScene(double time);
 void drawstuff(std::wstring text, int inInt);
+bool InitDirectInput(HINSTANCE hInstance, HWND hwnd);
+void DetectInput(double time, HWND hwnd);
 
 void StartTimer();
 double GetTime();
@@ -209,6 +227,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     //Init directx3d
     InitD3D(hwnd);
+    //Init Direct Input
+    if(!InitDirectInput(hInstance, hwnd)) {
+        MessageBox(0, L"Direct Input Initialization - Failed",L"Error", MB_OK);
+        return 0;
+    }
 
     // Run the message loop.
 
@@ -236,6 +259,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
             StartTimer();
         }
         frameTime = GetFrameTime();
+        DetectInput(frameTime, hwnd);
         UpdateScene(frameTime);
         RenderFrame();
     }
@@ -296,19 +320,25 @@ void UpdateScene(double time){
     cube1World = XMMatrixIdentity();
 
     //Define cube1's world space matrix
-    XMVECTOR rotaxis = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    Rotation = XMMatrixRotationAxis( rotaxis, rot);
+    XMVECTOR rotyaxis = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    XMVECTOR rotzaxis = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    XMVECTOR rotxaxis = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+
+    Rotation = XMMatrixRotationAxis(rotyaxis, rot);
+    Rotationx = XMMatrixRotationAxis(rotxaxis, rotx);
+    Rotationz = XMMatrixRotationAxis(rotzaxis, rotz);
     Translation = XMMatrixTranslation( 0.0f, 0.0f, 4.0f );
 
     //Set cube1's world space using the transformations
-    cube1World = Translation * Rotation;
+    cube1World = Translation * Rotation * Rotationx * Rotationz;
+
 
     //Reset cube2World
     cube2World = XMMatrixIdentity();
 
     //Define cube2's world space matrix
-    Rotation = XMMatrixRotationAxis( rotaxis, -rot);
-    Scale = XMMatrixScaling( 1.3f, 1.3f, 1.3f );
+    Rotation = XMMatrixRotationAxis( rotyaxis, -rot);
+    Scale = XMMatrixScaling( scaleX, scaleY, 1.3f );
 
     //Set cube2's world space matrix
     cube2World = Rotation * Scale;
@@ -479,6 +509,10 @@ void CleanD3D() {
     dwritetextformat->Release();
     blackbrush->Release();
     cbPerFrameBuffer->Release();
+
+    DIKeyboard->Unacquire();
+    DIMouse->Unacquire();
+    DirectInput->Release();
 
 }
 
@@ -821,6 +855,77 @@ void InitGraphics() {
     sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
     dev->CreateSamplerState( &sampDesc, &CubesTexSamplerState );
+}
+
+bool InitDirectInput(HINSTANCE hInstance, HWND hwnd) {
+    DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&DirectInput, NULL);
+
+    DirectInput->CreateDevice(GUID_SysKeyboard, &DIKeyboard, NULL);
+
+    DirectInput->CreateDevice(GUID_SysMouse, &DIMouse, NULL);
+
+    DIKeyboard->SetDataFormat(&c_dfDIKeyboard);
+    DIKeyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+
+    DIMouse->SetDataFormat(&c_dfDIMouse);
+    DIMouse->SetCooperativeLevel(hwnd, DISCL_EXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
+
+    return true;
+}
+
+void DetectInput(double time, HWND hwnd) {
+    DIMOUSESTATE mouseCurrState;
+
+    BYTE keyboardState[256];
+
+    DIKeyboard->Acquire();
+    DIMouse->Acquire();
+
+    DIMouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseCurrState);
+
+    DIKeyboard->GetDeviceState(sizeof(keyboardState),(LPVOID)&keyboardState);
+
+    if(keyboardState[DIK_ESCAPE] & 0x80)
+        PostMessage(hwnd, WM_DESTROY, 0, 0);
+
+    if(keyboardState[DIK_LEFT] & 0x80)
+    {
+        rotz -= 1.0f * time;
+    }
+    if(keyboardState[DIK_RIGHT] & 0x80)
+    {
+        rotz += 1.0f * time;
+    }
+    if(keyboardState[DIK_UP] & 0x80)
+    {
+        rotx += 1.0f * time;
+    }
+    if(keyboardState[DIK_DOWN] & 0x80)
+    {
+        rotx -= 1.0f * time;
+    }
+    if(mouseCurrState.lX != mouseLastState.lX)
+    {
+        scaleX -= (mouseCurrState.lX * 0.001f);
+    }
+    if(mouseCurrState.lY != mouseLastState.lY)
+    {
+        scaleY -= (mouseCurrState.lY * 0.001f);
+    }
+
+    if ( rotx > 6.28 )
+        rotx -=  6.28;
+    else if ( rotx < 0 )
+        rotx = 6.28 + rotx;
+
+    if ( rotz > 6.28 )
+        rotz -=  6.28;
+    else if ( rotz < 0 )
+        rotz =  6.28 + rotz;
+
+    mouseLastState = mouseCurrState;
+
+    return;
 }
 
 void StartTimer() {
