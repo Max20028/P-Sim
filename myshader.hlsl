@@ -53,36 +53,43 @@ float4 PShader(VOut input) : SV_TARGET
     float4 diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
 
     float3 finalColor = float3(0.0f, 0.0f, 0.0f);
-    
-    //Create the vector between the light position and the pixels position
-    float3 lightToPixelVec = light.pos - input.worldPos;
+    if(all(light.dir == float3(0.0f, 0.0f, 0.0f))) {
+        //Point Light Version
+        //Create the vector between the light position and the pixels position
+        float3 lightToPixelVec = light.pos - input.worldPos;
 
-    //Find the distance between the light pos and pixel pos
-    float d = length(lightToPixelVec);
+        //Find the distance between the light pos and pixel pos
+        float d = length(lightToPixelVec);
 
-    //Create the ambient light
-    float3 finalAmbient = diffuse * light.ambient;
+        //Create the ambient light
+        float3 finalAmbient = diffuse * light.ambient;
 
-    //If the pixel is too far from the light, just return just ambient
-    if(d>light.range)
-        return float4(finalAmbient, diffuse.a);
+        //If the pixel is too far from the light, just return just ambient
+        if(d>light.range)
+            return float4(finalAmbient, diffuse.a);
 
-    //Turn lightToPixelVec into a unit length vector describing the pixels direction from light to pixel
-    lightToPixelVec /= d;
+        //Turn lightToPixelVec into a unit length vector describing the pixels direction from light to pixel
+        lightToPixelVec /= d;
 
-    //Calculate how much light the pixel gets by the angle in which the light strikes the pixels surface
-    float howMuchLight = dot(lightToPixelVec, input.normal);
-    //If light is triking the front side of the pixel
-    if(howMuchLight > 0.0f) {
-        //Add light to the final color of the pixel
-        finalColor += howMuchLight * diffuse * light.diffuse;
+        //Calculate how much light the pixel gets by the angle in which the light strikes the pixels surface
+        float howMuchLight = dot(lightToPixelVec, input.normal);
+        //If light is triking the front side of the pixel
+        if(howMuchLight > 0.0f) {
+            //Add light to the final color of the pixel
+            finalColor += howMuchLight * diffuse * light.diffuse;
 
-        //Calculate Light's Falloff factor
-        finalColor /= light.att[0] + (light.att[1]*d) + (light.att[2]*d*d);
+            //Calculate Light's Falloff factor
+            finalColor /= light.att[0] + (light.att[1]*d) + (light.att[2]*d*d);
+        }
+        //Make sure the values are between 1 and 0, and add the ambient
+        finalColor = saturate(finalColor + finalAmbient);
+    } else {
+        //Directional Light Version
+        finalColor = diffuse * light.ambient;
+        finalColor += saturate(dot(light.dir, input.normal) * light.diffuse * diffuse);
     }
-    //Make sure the values are between 1 and 0, and add the ambient
-    finalColor = saturate(finalColor + finalAmbient);
     //REturn the final color
+
     return float4(finalColor, diffuse.a);
 
 }

@@ -41,8 +41,8 @@
 //      #pragma comment (lib, "d3dx10.lib")
 
 // define the screen resolution 800x600
-#define SCREEN_WIDTH  800
-#define SCREEN_HEIGHT 600
+#define SCREEN_WIDTH  1920
+#define SCREEN_HEIGHT 1080
 
 using namespace DirectX;
 
@@ -109,18 +109,26 @@ IDirectInputDevice8* DIMouse;
 DIMOUSESTATE mouseLastState;
 LPDIRECTINPUT8 DirectInput;
 
-float rotx = 0;
-float rotz = 0;
-float scaleX = 1.0f;
-float scaleY = 1.0f;
+//---------------------------
+//Camera Stuff
+XMVECTOR DefaultForward = XMVectorSet(0.0f,0.0f,1.0f, 0.0f);
+XMVECTOR DefaultRight = XMVectorSet(1.0f,0.0f,0.0f, 0.0f);
+XMVECTOR camForward = XMVectorSet(0.0f,0.0f,1.0f, 0.0f);
+XMVECTOR camRight = XMVectorSet(1.0f,0.0f,0.0f, 0.0f);
 
-XMMATRIX Rotationx;
-XMMATRIX Rotationz;
-//-------------------------
+XMMATRIX camRotationMatrix;
+XMMATRIX groundWorld;
+
+float moveLeftRight = 0.0f;
+float moveBackForward = 0.0f;
+
+float camYaw = 0.0f;
+float camPitch = 0.0f;
+//---------------------------
 
 // function prototypes
-void InitD3D(HWND hWnd);     // sets up and initializes Direct3D
-void CleanD3D(void);         // closes Direct3D and releases memory
+void InitD3D(HWND hwnd);     // sets up and initializes Direct3D
+void CleanD3D(HWND hwnd);         // closes Direct3D and releases memory
 void RenderFrame();
 void InitPipeline();
 void InitGraphics();
@@ -128,6 +136,7 @@ void UpdateScene(double time);
 void drawstuff(std::wstring text, int inInt);
 bool InitDirectInput(HINSTANCE hInstance, HWND hwnd);
 void DetectInput(double time, HWND hwnd);
+void UpdateCamera();
 
 void StartTimer();
 double GetTime();
@@ -265,7 +274,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     }
 
     //Clean D3d
-    CleanD3D();
+    CleanD3D(hwnd);
 
     return 0;
 }
@@ -311,37 +320,15 @@ void drawstuff(std::wstring text, int inInt) {
 
 
 void UpdateScene(double time){
-    //Keep the cubes rotating
-    rot += 1.0f * time;
-    if(rot > 6.28f)
-        rot = 0.0f;
-
     //Reset cube1World
-    cube1World = XMMatrixIdentity();
+    groundWorld = XMMatrixIdentity();
 
     //Define cube1's world space matrix
-    XMVECTOR rotyaxis = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    XMVECTOR rotzaxis = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    XMVECTOR rotxaxis = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
-
-    Rotation = XMMatrixRotationAxis(rotyaxis, rot);
-    Rotationx = XMMatrixRotationAxis(rotxaxis, rotx);
-    Rotationz = XMMatrixRotationAxis(rotzaxis, rotz);
-    Translation = XMMatrixTranslation( 0.0f, 0.0f, 4.0f );
+    Scale = XMMatrixScaling( 500.0f, 10.0f, 500.0f );
+    Translation = XMMatrixTranslation( 0.0f, 10.0f, 0.0f );
 
     //Set cube1's world space using the transformations
-    cube1World = Translation * Rotation * Rotationx * Rotationz;
-
-
-    //Reset cube2World
-    cube2World = XMMatrixIdentity();
-
-    //Define cube2's world space matrix
-    Rotation = XMMatrixRotationAxis( rotyaxis, -rot);
-    Scale = XMMatrixScaling( scaleX, scaleY, 1.3f );
-
-    //Set cube2's world space matrix
-    cube2World = Rotation * Scale;
+    groundWorld = Scale * Translation;
 }
 
 // this function initializes and prepares Direct3D for use
@@ -376,7 +363,7 @@ void InitD3D(HWND hWnd)
     scd.OutputWindow = hWnd;                                // the window to be used
     scd.SampleDesc.Count = 1;                               // how many multisamples
     scd.SampleDesc.Quality = 0;
-    scd.Windowed = TRUE;                                    // windowed/full-screen mode
+    scd.Windowed = FALSE;                                    // windowed/full-screen mode
     scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;     // allow full-screen switching
 
     // create a device, device context and swap chain using the information in the scd struct
@@ -480,9 +467,10 @@ void InitD3D(HWND hWnd)
 }
 
 // this is the function that cleans up Direct3D and COM
-void CleanD3D() {
+void CleanD3D(HWND hwnd) {
     printf("Cleanup D3D\n");
     swapchain->SetFullscreenState(FALSE, NULL);    // switch to windowed mode
+    PostMessage(hwnd, WM_DESTROY, 0, 0);
 
     // close and release all existing COM objects
     pLayout->Release();
@@ -531,7 +519,7 @@ void RenderFrame(void) {
     devcon->VSSetShader(pVS, 0, 0);
     devcon->PSSetShader(pPS, 0, 0);   
 
-    float color[4] = {0.5f,0.5f,0.5f,1.0f};
+    float color[4] = {0.4f,0.4f,0.4f,1.0f};
     devcon->ClearRenderTargetView(backbuffer, color);
     devcon->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -541,8 +529,8 @@ void RenderFrame(void) {
     //Setup view
 
         //Set the WVP matrix and send it to the constant buffer in effect file
-        WVP = cube1World * camView * camProjection;
-        cbPerObj.World = XMMatrixTranspose(cube1World);
+        WVP = groundWorld * camView * camProjection;
+        cbPerObj.World = XMMatrixTranspose(groundWorld);
         cbPerObj.WVP = XMMatrixTranspose(WVP);    
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
@@ -556,33 +544,8 @@ void RenderFrame(void) {
         //Draw the first cube
         // devcon->DrawIndexed( 36, 0, 0 );
         //Now the other side
-        devcon->RSSetState(CWcullMode);
-        devcon->DrawIndexed( 36, 0, 0 );
-
-
-        XMVECTOR lightVector = XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f );
-
-        lightVector = XMVector3TransformCoord(lightVector,cube1World);
-
-        light.pos.x = XMVectorGetX(lightVector);
-        light.pos.y = XMVectorGetY(lightVector);
-        light.pos.z = XMVectorGetZ(lightVector);
-
-        // printf("Draw\n");
-        WVP = cube2World * camView * camProjection;
-        cbPerObj.World = XMMatrixTranspose(cube2World);
-        cbPerObj.WVP = XMMatrixTranspose(WVP);    
-        devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
-        devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
-
-        devcon->PSSetShaderResources( 0, 1, &CubesTexture );
-        devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
-
-        //Draw the second cube
-        // devcon->RSSetState(CCWcullMode);
-        // devcon->DrawIndexed( 36, 0, 0 );
-        devcon->RSSetState(CWcullMode);
-        devcon->DrawIndexed( 36, 0, 0 );
+        devcon->RSSetState(CCWcullMode);
+        devcon->DrawIndexed( 6, 0, 0 );
 
 
     // switch the back buffer and the front buffer
@@ -683,84 +646,38 @@ void InitGraphics() {
     printf("InitGraphics\n");
 
     //Configure the point light
-    light.pos = XMFLOAT3(0.0f, 0.0f, 0.0f);
-    light.range = 100.0f;
-    light.att = XMFLOAT3(0.0f, 0.2f, 0.0f);
-    light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+    // light.pos = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    // light.range = 100.0f;
+    // light.att = XMFLOAT3(0.0f, 0.2f, 0.0f);
+    // light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+    // light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    //Configure the Directional Light
+    light.dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
     light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    // CUBES
+    //Vertex Buffer
+    //For a square for the ground
     Vertex v[] =
-{
-    // Front Face
-    Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f,-1.0f, -1.0f, -1.0f),
-    Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f,-1.0f,  1.0f, -1.0f),
-    Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 1.0f,  1.0f, -1.0f),
-    Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, -1.0f, -1.0f),
-
-    // Back Face
-    Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f,-1.0f, -1.0f, 1.0f),
-    Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 1.0f),
-    Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f),
-    Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f,-1.0f,  1.0f, 1.0f),
-
-    // Top Face
-    Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f,-1.0f, 1.0f, -1.0f),
-    Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f,-1.0f, 1.0f,  1.0f),
-    Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f),
-    Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f),
-
-    // Bottom Face
-    Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f),
-    Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f),
-    Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f, -1.0f,  1.0f),
-    Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f,-1.0f, -1.0f,  1.0f),
-
-    // Left Face
-    Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f,-1.0f, -1.0f,  1.0f),
-    Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f,-1.0f,  1.0f,  1.0f),
-    Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f,-1.0f,  1.0f, -1.0f),
-    Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f),
-
-    // Right Face
-    Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f),
-    Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 1.0f,  1.0f, -1.0f),
-    Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  1.0f,  1.0f),
-    Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, -1.0f,  1.0f),
-};
+    {
+        // Bottom Face
+        Vertex(-1.0f, -1.0f, -1.0f, 100.0f, 100.0f, 0.0f, 1.0f, 0.0f),
+        Vertex( 1.0f, -1.0f, -1.0f,   0.0f, 100.0f, 0.0f, 1.0f, 0.0f),
+        Vertex( 1.0f, -1.0f,  1.0f,   0.0f,   0.0f, 0.0f, 1.0f, 0.0f),
+        Vertex(-1.0f, -1.0f,  1.0f, 100.0f,   0.0f, 0.0f, 1.0f, 0.0f),
+    };
     
-        DWORD indices[] = {
-            // Front Face
-            0,  1,  2,
-            0,  2,  3,
-    
-            // Back Face
-            4,  5,  6,
-            4,  6,  7,
-    
-            // Top Face
-            8,  9, 10,
-            8, 10, 11,
-    
-            // Bottom Face
-            12, 13, 14,
-            12, 14, 15,
-    
-            // Left Face
-            16, 17, 18,
-            16, 18, 19,
-    
-            // Right Face
-            20, 21, 22,
-            20, 22, 23
-        };
+    DWORD indices[] = {
+        0,  1,  2,
+        0,  2,  3,
+    };
 
     //Square Index Buffer
     D3D11_BUFFER_DESC indexBufferDesc;
     ZeroMemory( &indexBufferDesc, sizeof(indexBufferDesc) );
 
     indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    indexBufferDesc.ByteWidth = sizeof(DWORD) * 12 * 3;
+    indexBufferDesc.ByteWidth = sizeof(DWORD) * 2 * 3;
     indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
     indexBufferDesc.CPUAccessFlags = 0;
     indexBufferDesc.MiscFlags = 0;
@@ -778,7 +695,7 @@ void InitGraphics() {
     ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
 
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    vertexBufferDesc.ByteWidth = sizeof( Vertex ) * 24;
+    vertexBufferDesc.ByteWidth = sizeof( Vertex ) * 4;
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.MiscFlags = 0;
@@ -841,7 +758,7 @@ void InitGraphics() {
     //Load the texture
     // D3DX11CreateShaderResourceViewFromFile( dev, L"braynzar.jpg", NULL, NULL, &CubesTexture, NULL );
     // LoadFromWICFile(L"resc/monkey.jpg",NULL, );
-    CreateWICTextureFromFile(dev, devcon, L"resc/monkey.jpg", NULL, &CubesTexture);
+    CreateWICTextureFromFile(dev, devcon, L"resc/grass.jpg", NULL, &CubesTexture);
     // CreateShaderResourceView();
 
     D3D11_SAMPLER_DESC sampDesc;
@@ -873,7 +790,8 @@ bool InitDirectInput(HINSTANCE hInstance, HWND hwnd) {
     return true;
 }
 
-void DetectInput(double time, HWND hwnd) {
+void DetectInput(double time, HWND hwnd)
+{
     DIMOUSESTATE mouseCurrState;
 
     BYTE keyboardState[256];
@@ -888,42 +806,34 @@ void DetectInput(double time, HWND hwnd) {
     if(keyboardState[DIK_ESCAPE] & 0x80)
         PostMessage(hwnd, WM_DESTROY, 0, 0);
 
-    if(keyboardState[DIK_LEFT] & 0x80)
+    float speed = 15.0f * time;
+
+    if(keyboardState[DIK_A] & 0x80)
     {
-        rotz -= 1.0f * time;
+        moveLeftRight -= speed;
     }
-    if(keyboardState[DIK_RIGHT] & 0x80)
+    if(keyboardState[DIK_D] & 0x80)
     {
-        rotz += 1.0f * time;
+        moveLeftRight += speed;
     }
-    if(keyboardState[DIK_UP] & 0x80)
+    if(keyboardState[DIK_W] & 0x80)
     {
-        rotx += 1.0f * time;
+        moveBackForward += speed;
     }
-    if(keyboardState[DIK_DOWN] & 0x80)
+    if(keyboardState[DIK_S] & 0x80)
     {
-        rotx -= 1.0f * time;
+        moveBackForward -= speed;
     }
-    if(mouseCurrState.lX != mouseLastState.lX)
+    if((mouseCurrState.lX != mouseLastState.lX) || (mouseCurrState.lY != mouseLastState.lY))
     {
-        scaleX -= (mouseCurrState.lX * 0.001f);
-    }
-    if(mouseCurrState.lY != mouseLastState.lY)
-    {
-        scaleY -= (mouseCurrState.lY * 0.001f);
+        camYaw += mouseLastState.lX * 0.001f;
+
+        camPitch += mouseCurrState.lY * 0.001f;
+
+        mouseLastState = mouseCurrState;
     }
 
-    if ( rotx > 6.28 )
-        rotx -=  6.28;
-    else if ( rotx < 0 )
-        rotx = 6.28 + rotx;
-
-    if ( rotz > 6.28 )
-        rotz -=  6.28;
-    else if ( rotz < 0 )
-        rotz =  6.28 + rotz;
-
-    mouseLastState = mouseCurrState;
+    UpdateCamera();
 
     return;
 }
@@ -954,3 +864,28 @@ double GetFrameTime() {
 
     return float(tickCount)/countsPerSecond;
 }
+
+void UpdateCamera()
+{
+    camRotationMatrix = XMMatrixRotationRollPitchYaw(camPitch, camYaw, 0);
+    camTarget = XMVector3TransformCoord(DefaultForward, camRotationMatrix );
+    camTarget = XMVector3Normalize(camTarget);
+
+    XMMATRIX RotateYTempMatrix;
+    RotateYTempMatrix = XMMatrixRotationY(camYaw);
+
+    camRight = XMVector3TransformCoord(DefaultRight, RotateYTempMatrix);
+    camUp = XMVector3TransformCoord(camUp, RotateYTempMatrix);
+    camForward = XMVector3TransformCoord(DefaultForward, RotateYTempMatrix);
+
+    camPosition += moveLeftRight*camRight;
+    camPosition += moveBackForward*camForward;
+
+    moveLeftRight = 0.0f;
+    moveBackForward = 0.0f;
+
+    camTarget = camPosition + camTarget;    
+
+    camView = XMMatrixLookAtLH( camPosition, camTarget, camUp );
+}
+
