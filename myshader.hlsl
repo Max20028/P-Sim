@@ -9,6 +9,7 @@ struct VOut
 struct Light
 {
     float3 dir;
+    float cone;
     float3 pos;
     float  range;
     float3 att;
@@ -53,7 +54,7 @@ float4 PShader(VOut input) : SV_TARGET
     float4 diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
 
     float3 finalColor = float3(0.0f, 0.0f, 0.0f);
-    if(all(light.dir == float3(0.0f, 0.0f, 0.0f))) {
+    if(any(light.att)) {
         //Point Light Version
         //Create the vector between the light position and the pixels position
         float3 lightToPixelVec = light.pos - input.worldPos;
@@ -80,6 +81,12 @@ float4 PShader(VOut input) : SV_TARGET
 
             //Calculate Light's Falloff factor
             finalColor /= light.att[0] + (light.att[1]*d) + (light.att[2]*d*d);
+            
+            //If this is a spotlight... only have light in direction
+            if(light.cone > 0.0f) {
+                //Calculate falloff from center to edge of pointlight cone
+                finalColor *= pow(max(dot(-lightToPixelVec, light.dir), 0.0f), light.cone);
+            }
         }
         //Make sure the values are between 1 and 0, and add the ambient
         finalColor = saturate(finalColor + finalAmbient);

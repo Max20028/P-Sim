@@ -172,11 +172,11 @@ struct Light
         ZeroMemory(this, sizeof(Light));
     }
     XMFLOAT3 dir;
-    float pad;
+    float cone;
     XMFLOAT3 pos;
     float range;
     XMFLOAT3 att;
-    float pad2;
+    float pad;
     XMFLOAT4 ambient;
     XMFLOAT4 diffuse;
 };
@@ -330,6 +330,15 @@ void UpdateScene(double time){
 
     //Set cube1's world space using the transformations
     groundWorld = Scale * Translation;
+
+    //Update the light to follow the camera and point where the camera points, essentially making a flashlight
+    light.pos.x = XMVectorGetX(camPosition);
+    light.pos.y = XMVectorGetY(camPosition);
+    light.pos.z = XMVectorGetZ(camPosition);
+
+    light.dir.x = XMVectorGetX(camTarget) - light.pos.x;
+    light.dir.y = XMVectorGetY(camTarget) - light.pos.y;
+    light.dir.z = XMVectorGetZ(camTarget) - light.pos.z;
 }
 
 // this function initializes and prepares Direct3D for use
@@ -655,8 +664,16 @@ void InitGraphics() {
     // light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
     // light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     //Configure the Directional Light
-    light.dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
-    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+    // light.dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    // light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+    // light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    //Configure the Spotlight
+    light.pos = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    light.dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+    light.range = 1000.0f;
+    light.cone = 20.0f;
+    light.att = XMFLOAT3(0.4f, 0.02f, 0.0f);
+    light.ambient = XMFLOAT4(0.2f, 0.0f, 0.0f, 1.0f);
     light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     //Vertex Buffer
