@@ -52,6 +52,7 @@ float4 PShader(VOut input) : SV_TARGET
     input.normal = normalize(input.normal);
 
     float4 diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
+    // diffuse.g = abs((diffuse.g * input.worldPos.x * 0.05))%1;
 
     float3 finalColor = float3(0.0f, 0.0f, 0.0f);
     if(any(light.att)) {

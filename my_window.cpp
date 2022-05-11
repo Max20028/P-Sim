@@ -240,6 +240,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     //Init Direct Input
     if(!InitDirectInput(hInstance, hwnd)) {
         MessageBox(0, L"Direct Input Initialization - Failed",L"Error", MB_OK);
+        CleanD3D(hwnd);
         return 0;
     }
 
@@ -296,7 +297,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 void drawstuff(std::wstring text, int inInt) {
         static const WCHAR sc_helloWorld[] = L"Hello, World!";
         std::wostringstream printString;
-        printString << text << inInt;
+        printString << text << inInt << "\nPitch: " << camPitch;
         std::wstring printText = printString.str();
 
         // Retrieve the size of the render target.
@@ -673,7 +674,7 @@ void InitGraphics() {
     light.range = 1000.0f;
     light.cone = 20.0f;
     light.att = XMFLOAT3(0.4f, 0.02f, 0.0f);
-    light.ambient = XMFLOAT4(0.2f, 0.0f, 0.0f, 1.0f);
+    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
     light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     //Vertex Buffer
@@ -849,6 +850,10 @@ void DetectInput(double time, HWND hwnd)
         camYaw += mouseLastState.lX * 0.001f;
 
         camPitch += mouseCurrState.lY * 0.001f;
+        if(abs(camPitch) > 1.57) {
+            if(camPitch > 0) camPitch = 1.57;
+            else camPitch = -1.57;
+        }
 
         mouseLastState = mouseCurrState;
     }
