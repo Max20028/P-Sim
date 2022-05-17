@@ -17,15 +17,18 @@ struct Light
     float4 diffuse;
 };
 
+cbuffer cbPerFrame
+{
+    Light light;
+};
+
 cbuffer cbPerObject
 {
     float4x4 WVP;
     float4x4 World;
-};
 
-cbuffer cbPerFrame
-{
-    Light light;
+    float4 difColor;
+    bool hasTexture;
 };
 
 Texture2D ObjTexture;
@@ -51,14 +54,22 @@ float4 PShader(VOut input) : SV_TARGET
 {
     input.normal = normalize(input.normal);
 
-    float4 diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
-    // diffuse.g = abs((diffuse.g * input.worldPos.x * 0.05))%1;
+    //Set diffuse color of material
+    float4 diffuse = difColor;
+    // diffuse = float4(0.5f, 0.5f, 0.5f, 1.0f);
 
+    //If material has a diffuse texture map, set it now
+    if(hasTexture == true)
+        diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
+    // diffuse.g = abs((diffuse.g * input.worldPos.x * 0.05))%1;
+    
     float3 finalColor = float3(0.0f, 0.0f, 0.0f);
+
     if(any(light.att)) {
         //Point Light Version
         //Create the vector between the light position and the pixels position
         float3 lightToPixelVec = light.pos - input.worldPos;
+        
 
         //Find the distance between the light pos and pixel pos
         float d = length(lightToPixelVec);
@@ -75,6 +86,7 @@ float4 PShader(VOut input) : SV_TARGET
 
         //Calculate how much light the pixel gets by the angle in which the light strikes the pixels surface
         float howMuchLight = dot(lightToPixelVec, input.normal);
+        
         //If light is triking the front side of the pixel
         if(howMuchLight > 0.0f) {
             //Add light to the final color of the pixel
@@ -89,6 +101,7 @@ float4 PShader(VOut input) : SV_TARGET
                 finalColor *= pow(max(dot(-lightToPixelVec, light.dir), 0.0f), light.cone);
             }
         }
+
         //Make sure the values are between 1 and 0, and add the ambient
         finalColor = saturate(finalColor + finalAmbient);
     } else {
@@ -97,7 +110,7 @@ float4 PShader(VOut input) : SV_TARGET
         finalColor += saturate(dot(light.dir, input.normal) * light.diffuse * diffuse);
     }
     //REturn the final color
-
+    
     return float4(finalColor, diffuse.a);
 
 }
