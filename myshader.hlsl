@@ -27,8 +27,8 @@ cbuffer cbPerObject
     float4x4 WVP;
     float4x4 World;
 
-    float4 difColor;
     bool hasTexture;
+    float4 difColor;
 };
 
 Texture2D ObjTexture;
