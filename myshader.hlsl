@@ -4,6 +4,7 @@ struct VOut
     float4 worldPos : POSITION;
     float2 texcoord : TEXCOORD;
     float3 normal : NORMAL;
+    float3 tangent : TANGENT;
 };
 
 struct Light
@@ -27,14 +28,16 @@ cbuffer cbPerObject
     float4x4 WVP;
     float4x4 World;
 
-    bool hasTexture;
     float4 difColor;
+    bool hasTexture;
+    bool hasNormMap;
 };
 
 Texture2D ObjTexture;
+Texture2D ObjNormMap;
 SamplerState ObjSamplerState;
 
-VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 normal : NORMAL)
+VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 normal : NORMAL, float3 tangent : TANGENT)
 {
     VOut output;
 
@@ -45,6 +48,8 @@ VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 norm
     output.normal = mul(normal, World);
 
     output.texcoord = texcoord;
+
+    output.tangent = mul(tangent, World);
 
     return output;
 }
@@ -62,7 +67,29 @@ float4 PShader(VOut input) : SV_TARGET
     if(hasTexture == true)
         diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
     // diffuse.g = abs((diffuse.g * input.worldPos.x * 0.05))%1;
-    
+
+
+    //If material has a normal map, we can set it now
+    if(hasNormMap == true)
+    {
+        //Load normal from normal map
+        float4 normalMap = ObjNormMap.Sample( ObjSamplerState, input.texcoord );
+
+        //Change normal map range from [0, 1] to [-1, 1]
+        normalMap = (2.0f*normalMap) - 1.0f;
+
+        //Make sure tangent is completely orthogonal to normal
+        input.tangent = normalize(input.tangent - dot(input.tangent, input.normal)*input.normal);
+        //Create the biTangent
+        float3 biTangent = cross(input.normal, input.tangent);
+
+        //Create the "Texture Space"
+        float3x3 texSpace = float3x3(input.tangent, biTangent, input.normal);
+
+        //Convert normal from normal map to texture space and store in input.normal
+        input.normal = normalize(mul(normalMap, texSpace));
+    }
+
     float3 finalColor = float3(0.0f, 0.0f, 0.0f);
 
     if(any(light.att)) {
@@ -110,7 +137,7 @@ float4 PShader(VOut input) : SV_TARGET
         finalColor += saturate(dot(light.dir, input.normal) * light.diffuse * diffuse);
     }
     //REturn the final color
-    
+    // return float4(input.normal, diffuse.a);
     return float4(finalColor, diffuse.a);
 
 }

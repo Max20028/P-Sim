@@ -173,12 +173,16 @@ struct Vertex    //Overloaded Vertex Structure
     Vertex(){}
     Vertex(float x, float y, float z,
         float u, float v,
-        float nx, float ny, float nz)
-        : pos(x,y,z), texcoord(u, v), normal(nx, ny, nz){}
+        float nx, float ny, float nz,
+        float tx, float ty, float tz)
+        : pos(x,y,z), texcoord(u, v), normal(nx, ny, nz),
+        tangent(tx, ty, tz){}
 
     XMFLOAT3 pos;
     XMFLOAT2 texcoord;
     XMFLOAT3 normal;
+    XMFLOAT3 tangent;
+    XMFLOAT3 biTangent;
 };
 
 struct cbPerObject
@@ -186,7 +190,11 @@ struct cbPerObject
     XMMATRIX  WVP;
     XMMATRIX  World;
     XMFLOAT4 difColor;
-    bool hasTexture;
+    BOOL hasTexture;
+    //Because of HLSL structure packing, we will use windows BOOL
+    //instead of bool because HLSL packs things into 4 bytes, and
+    //bool is only one byte, where BOOL is 4 bytes
+    BOOL hasNormMap;
 };
 
 cbPerObject cbPerObj;
@@ -222,6 +230,8 @@ struct SurfaceMaterial
     std::wstring matName;
     XMFLOAT4 difColor;
     int texArrayIndex;
+    int normMapTexArrayIndex;
+    bool hasNormMap;
     bool hasTexture;
     bool transparent;
 };
@@ -421,7 +431,7 @@ void InitD3D(HWND hWnd)
     scd.OutputWindow = hWnd;                                // the window to be used
     scd.SampleDesc.Count = 1;                               // how many multisamples
     scd.SampleDesc.Quality = 0;
-    scd.Windowed = FALSE;                                    // windowed/full-screen mode
+    scd.Windowed = false;                                    // windowed/full-screen mode
     scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;     // allow full-screen switching
 
     // create a device, device context and swap chain using the information in the scd struct
@@ -606,12 +616,15 @@ void RenderFrame(void) {
         cbPerObj.World = XMMatrixTranspose(meshWorld);    
         cbPerObj.difColor = material[meshSubsetTexture[i]].difColor;
         cbPerObj.hasTexture = material[meshSubsetTexture[i]].hasTexture;
+        cbPerObj.hasNormMap = material[meshSubsetTexture[i]].hasNormMap;
         // printf("%d\n",cbPerObj.hasTexture);
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
         devcon->PSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
         if(material[meshSubsetTexture[i]].hasTexture)
             devcon->PSSetShaderResources( 0, 1, &meshSRV[material[meshSubsetTexture[i]].texArrayIndex] );
+        if(material[meshSubsetTexture[i]].hasNormMap)
+            devcon->PSSetShaderResources( 1, 1, &meshSRV[material[meshSubsetTexture[i]].normMapTexArrayIndex] );
         devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
 
         devcon->RSSetState(NoCullMode);
@@ -639,6 +652,7 @@ void RenderFrame(void) {
         cbPerObj.World = XMMatrixTranspose(meshWorld);    
         cbPerObj.difColor = material[meshSubsetTexture[i]].difColor;
         cbPerObj.hasTexture = material[meshSubsetTexture[i]].hasTexture;
+        cbPerObj.hasNormMap = material[meshSubsetTexture[i]].hasNormMap;
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
         devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
         devcon->PSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
@@ -673,12 +687,11 @@ void InitPipeline()
     // encapsulate both shaders into shader objects
     dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL, &pVS);
     dev->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), NULL, &pPS);
-    printf("O");
 
+    printf("O");
     // set the shader objects
     devcon->VSSetShader(pVS, 0, 0);
     devcon->PSSetShader(pPS, 0, 0);
-    
 
     printf("B");
     // create the input layout object
@@ -686,7 +699,8 @@ void InitPipeline()
     {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"NORMAL",     0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
     };
 
     dev->CreateInputLayout(ied, ARRAYSIZE(ied), VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
@@ -770,24 +784,10 @@ void InitGraphics() {
     light.range = 1000.0f;
     light.cone = 20.0f;
     light.att = XMFLOAT3(0.4f, 0.02f, 0.0f);
-    light.ambient = XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f);
+    light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
     light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    //Vertex Buffer
-    //For a square for the ground
-    Vertex v[] =
-    {
-        // Bottom Face
-        Vertex(-1.0f, -1.0f, -1.0f, 100.0f, 100.0f, 0.0f, 1.0f, 0.0f),
-        Vertex( 1.0f, -1.0f, -1.0f,   0.0f, 100.0f, 0.0f, 1.0f, 0.0f),
-        Vertex( 1.0f, -1.0f,  1.0f,   0.0f,   0.0f, 0.0f, 1.0f, 0.0f),
-        Vertex(-1.0f, -1.0f,  1.0f, 100.0f,   0.0f, 0.0f, 1.0f, 0.0f),
-    };
-    
-    DWORD indices[] = {
-        0,  1,  2,
-        0,  2,  3,
-    };
+    printf("C");
 
     //Square Index Buffer
     D3D11_BUFFER_DESC indexBufferDesc;
@@ -799,14 +799,12 @@ void InitGraphics() {
     indexBufferDesc.CPUAccessFlags = 0;
     indexBufferDesc.MiscFlags = 0;
 
-
     D3D11_SUBRESOURCE_DATA iinitData;
-
-    iinitData.pSysMem = indices;
     dev->CreateBuffer(&indexBufferDesc, &iinitData, &squareIndexBuffer);
 
     devcon->IASetIndexBuffer( squareIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
+    printf("R");
 
     D3D11_BUFFER_DESC vertexBufferDesc;
     ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
@@ -817,11 +815,14 @@ void InitGraphics() {
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.MiscFlags = 0;
 
+    printf("A");
+
     D3D11_SUBRESOURCE_DATA vertexBufferData; 
 
     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
-    vertexBufferData.pSysMem = v;
     dev->CreateBuffer( &vertexBufferDesc, &vertexBufferData, &squareVertBuffer);
+
+    printf("L");
 
     //Set the vertex buffer
     UINT stride = sizeof( Vertex );
@@ -841,6 +842,8 @@ void InitGraphics() {
 
     dev->CreateBuffer(&cbbd, NULL, &cbPerObjectBuffer);
 
+    printf("N");
+
     //Create perframe buffer
     ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
 
@@ -851,6 +854,8 @@ void InitGraphics() {
     cbbd.MiscFlags = 0;
 
     dev->CreateBuffer(&cbbd, NULL, &cbPerFrameBuffer);
+
+    printf("A");
 
     #ifdef WIREFRAME
     //Rasterizer Stage
@@ -877,9 +882,12 @@ void InitGraphics() {
     // LoadFromWICFile(L"resc/monkey.jpg",NULL, );
     // CreateWICTextureFromFile(dev, devcon, L"resc/metalpanel.jpg", NULL, &CubesTexture);
     // CreateShaderResourceView();
-    if(!LoadObjModel(L"resc/spaceCompound.obj", &meshVertBuff, &meshIndexBuff, meshSubsetIndexStart, meshSubsetTexture, material, meshSubsets, true, false)) {
-        return;
-    }
+
+    printf("L");
+
+    if(!LoadObjModel(L"resc/ground.obj", &meshVertBuff, &meshIndexBuff, meshSubsetIndexStart, meshSubsetTexture, material, meshSubsets, true, true)) return;
+
+    printf("E\n");
     D3D11_SAMPLER_DESC sampDesc;
     ZeroMemory( &sampDesc, sizeof(sampDesc) );
     sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1454,6 +1462,7 @@ bool LoadObjModel(std::wstring filename,
 
         return false;
     }
+
     subsetIndexStart.push_back(vIndex); //There won't be another index start after our last subset, so set it here
 
     //sometimes "g" is defined at the very top of the file, then again before the first group of faces.
@@ -1476,11 +1485,12 @@ bool LoadObjModel(std::wstring filename,
     fileIn.open(meshMatLib.c_str());
 
     std::wstring lastStringRead;
-    int matCount = material.size();    //total materials
+    int matCount = 0;    //total materials
 
     //kdset - If our diffuse color was not set, we can use the ambient color (which is usually the same)
     //If the diffuse color WAS set, then we don't need to set our diffuse color to ambient
     bool kdset = false;
+
     if (fileIn)
     {
         while(fileIn)
@@ -1614,10 +1624,6 @@ bool LoadObjModel(std::wstring filename,
                                     if(!alreadyLoaded)
                                     {
                                         ID3D11ShaderResourceView* tempMeshSRV;
-                                        //Tutorial Version
-                                        // hr = D3DX11CreateShaderResourceViewFromFile( dev, fileNamePath.c_str(),
-                                        //     NULL, NULL, &tempMeshSRV, NULL );
-                                        //My Version
                                         hr = CreateWICTextureFromFile(dev, devcon, fileNamePath.c_str(), NULL, &tempMeshSRV);
                                         if(SUCCEEDED(hr))
                                         {
@@ -1638,6 +1644,73 @@ bool LoadObjModel(std::wstring filename,
                                 //be using the alpha channel in the diffuse map
                                 material[matCount-1].transparent = true;
                             }
+
+                            
+                            //map_bump - bump map (we're usinga normal map though)
+                            else if(checkChar == 'b')
+                            {
+                                checkChar = fileIn.get();
+                                if(checkChar == 'u')
+                                {
+                                    checkChar = fileIn.get();
+                                    if(checkChar == 'm')
+                                    {
+                                        checkChar = fileIn.get();
+                                        if(checkChar == 'p')
+                                        {
+                                            std::wstring fileNamePath;
+
+                                            fileIn.get();    //Remove whitespace between map_bump and file
+
+                                            //Get the file path - We read the pathname char by char since
+                                            //pathnames can sometimes contain spaces, so we will read until
+                                            //we find the file extension
+                                            bool texFilePathEnd = false;
+                                            while(!texFilePathEnd)
+                                            {
+                                                checkChar = fileIn.get();
+
+                                                fileNamePath += checkChar;
+
+                                                if(checkChar == '.')
+                                                {
+                                                    for(int i = 0; i < 3; ++i)
+                                                        fileNamePath += fileIn.get();
+
+                                                    texFilePathEnd = true;
+                                                }                            
+                                            }
+
+                                            //check if this texture has already been loaded
+                                            bool alreadyLoaded = false;
+                                            for(int i = 0; i < textureNameArray.size(); ++i)
+                                            {
+                                                if(fileNamePath == textureNameArray[i])
+                                                {
+                                                    alreadyLoaded = true;
+                                                    material[matCount-1].normMapTexArrayIndex = i;
+                                                    material[matCount-1].hasNormMap = true;
+                                                }
+                                            }
+
+                                            //if the texture is not already loaded, load it now
+                                            if(!alreadyLoaded)
+                                            {
+                                                ID3D11ShaderResourceView* tempMeshSRV;
+                                                hr = CreateWICTextureFromFile(dev, devcon, fileNamePath.c_str(), NULL, &tempMeshSRV);
+                                                if(SUCCEEDED(hr))
+                                                {
+                                                    textureNameArray.push_back(fileNamePath.c_str());
+                                                    material[matCount-1].normMapTexArrayIndex = meshSRV.size();
+                                                    meshSRV.push_back(tempMeshSRV);
+                                                    material[matCount-1].hasNormMap = true;
+                                                }
+                                            }    
+                                        }
+                                    }
+                                }
+                            }
+                            
                         }
                     }
                 }
@@ -1668,6 +1741,10 @@ bool LoadObjModel(std::wstring filename,
                                         fileIn >> material[matCount].matName;
                                         material[matCount].transparent = false;
                                         material[matCount].hasTexture = false;
+                                        
+                                        material[matCount].hasNormMap = false;
+                                        material[matCount].normMapTexArrayIndex = 0;
+                                        
                                         material[matCount].texArrayIndex = 0;
                                         matCount++;
                                         kdset = false;
@@ -1696,6 +1773,7 @@ bool LoadObjModel(std::wstring filename,
 
         return false;
     }
+
     //Set the subsets material to the index value
     //of the its material in our material array
     for(int i = 0; i < meshSubsets; ++i)
@@ -1737,6 +1815,13 @@ bool LoadObjModel(std::wstring filename,
         //normalized and unnormalized normals
         XMFLOAT3 unnormalized = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
+        
+        //tangent stuff
+        std::vector<XMFLOAT3> tempTangent;
+        XMFLOAT3 tangent = XMFLOAT3(0.0f, 0.0f, 0.0f);
+        float tcU1, tcV1, tcU2, tcV2;
+        
+
         //Used to get vectors (sides) from the position of the verts
         float vecX, vecY, vecZ;
 
@@ -1745,6 +1830,7 @@ bool LoadObjModel(std::wstring filename,
         XMVECTOR edge2 = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
 
         //Compute face normals
+        //And Tangents
         for(int i = 0; i < meshTriangles; ++i)
         {
             //Get the vector describing one edge of our triangle (edge 0,2)
@@ -1761,15 +1847,32 @@ bool LoadObjModel(std::wstring filename,
 
             //Cross multiply the two edge vectors to get the un-normalized face normal
             XMStoreFloat3(&unnormalized, XMVector3Cross(edge1, edge2));
-            tempNormal.push_back(unnormalized);            //Save unormalized normal (for normal averaging)
+
+            tempNormal.push_back(unnormalized);
+
+            
+            //Find first texture coordinate edge 2d vector
+            tcU1 = vertices[indices[(i*3)]].texcoord.x - vertices[indices[(i*3)+2]].texcoord.x;
+            tcV1 = vertices[indices[(i*3)]].texcoord.y - vertices[indices[(i*3)+2]].texcoord.y;
+
+            //Find second texture coordinate edge 2d vector
+            tcU2 = vertices[indices[(i*3)+2]].texcoord.x - vertices[indices[(i*3)+1]].texcoord.x;
+            tcV2 = vertices[indices[(i*3)+2]].texcoord.y - vertices[indices[(i*3)+1]].texcoord.y;
+
+            //Find tangent using both tex coord edges and position edges
+            tangent.x = (tcV1 * XMVectorGetX(edge1) - tcV2 * XMVectorGetX(edge2)) * (1.0f / (tcU1 * tcV2 - tcU2 * tcV1));
+            tangent.y = (tcV1 * XMVectorGetY(edge1) - tcV2 * XMVectorGetY(edge2)) * (1.0f / (tcU1 * tcV2 - tcU2 * tcV1));
+            tangent.z = (tcV1 * XMVectorGetZ(edge1) - tcV2 * XMVectorGetZ(edge2)) * (1.0f / (tcU1 * tcV2 - tcU2 * tcV1));
+
+            tempTangent.push_back(tangent);
+            
         }
 
         //Compute vertex normals (normal Averaging)
         XMVECTOR normalSum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+        XMVECTOR tangentSum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
         int facesUsing = 0;
-        float tX;
-        float tY;
-        float tZ;
+        float tX, tY, tZ;    //temp axis variables
 
         //Go through each vertex
         for(int i = 0; i < totalVerts; ++i)
@@ -1786,26 +1889,51 @@ bool LoadObjModel(std::wstring filename,
                     tZ = XMVectorGetZ(normalSum) + tempNormal[j].z;
 
                     normalSum = XMVectorSet(tX, tY, tZ, 0.0f);    //If a face is using the vertex, add the unormalized face normal to the normalSum
+
+                            
+                    //We can reuse tX, tY, tZ to sum up tangents
+                    tX = XMVectorGetX(tangentSum) + tempTangent[j].x;
+                    tY = XMVectorGetY(tangentSum) + tempTangent[j].y;
+                    tZ = XMVectorGetZ(tangentSum) + tempTangent[j].z;
+
+                    tangentSum = XMVectorSet(tX, tY, tZ, 0.0f); //sum up face tangents using this vertex
+                    
+
                     facesUsing++;
                 }
             }
 
             //Get the actual normal by dividing the normalSum by the number of faces sharing the vertex
-            //Original version from guide
-            // normalSum = normalSum / facesUsing;
-            //My version
-            normalSum = DirectX::XMVectorScale(normalSum, 1/float(facesUsing));
+            // printf("%f\n", 1/float(facesUsing));
+            normalSum = XMVectorScale(normalSum, 1/float(facesUsing));
+            tangentSum = XMVectorScale(tangentSum, 1/float(facesUsing));
 
-            //Normalize the normalSum vector
-            normalSum = DirectX::XMVector3Normalize(normalSum);
 
-            //Store the normal in our current vertex
+            //Normalize the normalSum vector and tangent
+            normalSum = XMVector3Normalize(normalSum);
+            
+            tangentSum =  XMVector3Normalize(tangentSum);
+            
+
+            //Store the normal and tangent in our current vertex
             vertices[i].normal.x = XMVectorGetX(normalSum);
             vertices[i].normal.y = XMVectorGetY(normalSum);
             vertices[i].normal.z = XMVectorGetZ(normalSum);
 
-            //Clear normalSum and facesUsing for next vertex
+            
+            vertices[i].tangent.x = XMVectorGetX(tangentSum);
+            vertices[i].tangent.y = XMVectorGetY(tangentSum);
+            vertices[i].tangent.z = XMVectorGetZ(tangentSum);
+
+            // printf("%f, %f, %f\n", vertices[i].normal.x,vertices[i].normal.y,vertices[i].normal.z);
+            // printf("%f, %f, %f\n", vertices[i].tangent.x,vertices[i].tangent.y,vertices[i].tangent.z);
+            
+
+            //Clear normalSum, tangentSum and facesUsing for next vertex
             normalSum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+            
+            tangentSum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+            
             facesUsing = 0;
 
         }
