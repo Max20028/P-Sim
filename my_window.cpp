@@ -190,6 +190,23 @@ double pickOpSpeed = 0.0f;
 
 bool isPDown = false;
 //----------------------------
+//Collision Detection
+XMVECTOR bottleBoundingBoxMinVertex[820];
+XMVECTOR bottleBoundingBoxMaxVertex[820];
+
+XMVECTOR thrownBottleBoundingBoxMinVertex;
+XMVECTOR thrownBottleBoundingBoxMaxVertex;
+XMMATRIX thrownBottleWorld;
+XMVECTOR thrownBottleDir;
+bool bottleFlying;
+
+int cdMethod = 0;
+
+double cdOpSpeed = 0.0f;
+
+bool isCDown = false;
+
+//----------------------------
 
 
 // function prototypes
@@ -232,6 +249,22 @@ void CreateBoundingVolumes(std::vector<XMFLOAT3> &vertPosArray,    // The array 
     std::vector<DWORD>& boundingBoxIndex,                            // This is our bounding box's index array
     float &boundingSphere,                                            // The float containing the radius of our bounding sphere
     XMVECTOR &objectCenterOffset);                                    // A vector containing the distance between the models actual center and (0, 0, 0) in model space
+bool BoundingSphereCollision(float firstObjBoundingSphere, 
+    XMVECTOR firstObjCenterOffset,
+    XMMATRIX& firstObjWorldSpace,
+    float secondObjBoundingSphere,
+    XMVECTOR secondObjCenterOffset, 
+    XMMATRIX& secondObjWorldSpace);
+
+bool BoundingBoxCollision(XMVECTOR& firstObjBoundingBoxMinVertex, 
+    XMVECTOR& firstObjBoundingBoxMaxVertex,
+    XMVECTOR& secondObjBoundingBoxMinVertex, 
+    XMVECTOR& secondObjBoundingBoxMaxVertex);
+void CalculateAABB(std::vector<XMFLOAT3> boundingBoxVerts, 
+    XMMATRIX& worldSpace,
+    XMVECTOR& boundingBoxMin,
+    XMVECTOR& boundingBoxMax);
+
 
 struct Vertex    //Overloaded Vertex Structure
 {
@@ -408,21 +441,18 @@ void drawstuff(std::wstring text, int inInt) {
         static const WCHAR sc_helloWorld[] = L"Hello, World!";
 
     // Display which picking method we are doing
-    std::wstring pickWhatStr;
-    if(pickWhat == 0)
-        pickWhatStr = L"Bounding Sphere";
-    if(pickWhat == 1)
-        pickWhatStr = L"Bounding Box";
-    if(pickWhat == 2)
-        pickWhatStr = L"Model";
+    std::wstring cdMethodString;
+    if(cdMethod == 0)
+        cdMethodString = L"Bounding Sphere";
+    if(cdMethod == 1)
+        cdMethodString = L"Bounding Box";
 
         std::wostringstream printString;
         printString << text << inInt << "\nPitch: " << camPitch << "\n" 
         << "LightPos: " << light.pos.x << "," << light.pos.y << ", " << light.pos.z << "\n"
         << "Score: " << score << "\n"
-        << "Picked Dist: " << pickedDist << "\n"
-        << L"Pick Operation Speed: " << pickOpSpeed << L"\n"
-        << L"Picking Method (P): " << pickWhatStr;
+        << L"Collission Detection Method (C): " << cdMethodString << L"\n"
+        << L"CD Op. Speed: " << cdOpSpeed;
         std::wstring printText = printString.str();
 
         // Retrieve the size of the render target.
@@ -474,6 +504,52 @@ void UpdateScene(double time){
     Translation = XMMatrixTranslation( 0.0f, 0.0f, 0.0f );
 
     meshWorld = Rotation * Scale * Translation;
+
+        //Update our thrown bottles position
+    if(bottleFlying)
+    {
+        XMVECTOR tempBottlePos = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+        // tempBottlePos = XMVector3TransformCoord(tempBottlePos, thrownBottleWorld) + (thrownBottleDir * time * 10.0f);
+        tempBottlePos = XMVector3TransformCoord(tempBottlePos, thrownBottleWorld) + (XMVectorScale(thrownBottleDir, time * 10.0f));
+        Rotation = XMMatrixRotationY(3.14f);
+
+        thrownBottleWorld = XMMatrixIdentity();
+        Translation = XMMatrixTranslation( XMVectorGetX(tempBottlePos), XMVectorGetY(tempBottlePos), XMVectorGetZ(tempBottlePos) );
+
+        thrownBottleWorld = Translation;
+
+        //Update the objects AABB every time the object is transformed
+        CalculateAABB(bottleBoundingBoxVertPosArray, thrownBottleWorld, thrownBottleBoundingBoxMinVertex, thrownBottleBoundingBoxMaxVertex);
+
+        for(int i = 0; i < numBottles; i++)
+        {
+            if(bottleHit[i] == 0) // No need to check bottles already hit
+            {    
+                double cdOpStartTime = GetTime();
+                if(cdMethod == 0)
+                {
+                    if(BoundingSphereCollision(bottleBoundingSphere, bottleCenterOffset, thrownBottleWorld, bottleBoundingSphere, bottleCenterOffset, bottleWorld[i]))
+                    {
+                        bottleHit[i] = 1;
+                        score++;
+                        bottleFlying = false;
+                    }
+                }
+
+                if(cdMethod == 1)
+                {
+                    if(BoundingBoxCollision(thrownBottleBoundingBoxMinVertex, thrownBottleBoundingBoxMaxVertex, bottleBoundingBoxMinVertex[i], bottleBoundingBoxMaxVertex[i]))
+                    {
+                        bottleHit[i] = 1;
+                        score++;
+                        bottleFlying = false;
+                    }
+                }    
+                // This is the time in seconds it took to complete the CD process
+                cdOpSpeed = GetTime() - cdOpStartTime;    
+            }
+        }
+    }
 }
 
 // this function initializes and prepares Direct3D for use
@@ -751,6 +827,39 @@ void RenderFrame(void) {
         }
     }
 
+        if(bottleFlying)
+    {
+        for(int i = 0; i < bottleSubsets; ++i)
+        {
+            // Set the grounds index buffer
+            devcon->IASetIndexBuffer( bottleIndexBuff, DXGI_FORMAT_R32_UINT, 0);
+            // Set the grounds vertex buffer
+            devcon->IASetVertexBuffers( 0, 1, &bottleVertBuff, &stride, &offset );
+
+            // Set the WVP matrix and send it to the constant buffer in effect file
+            WVP = thrownBottleWorld * camView * camProjection;
+            cbPerObj.WVP = XMMatrixTranspose(WVP);    
+            cbPerObj.World = XMMatrixTranspose(thrownBottleWorld);    
+            cbPerObj.difColor = bottlematerial[bottleSubsetTexture[i]].difColor;
+            cbPerObj.hasTexture = bottlematerial[bottleSubsetTexture[i]].hasTexture;
+            cbPerObj.hasNormMap = bottlematerial[bottleSubsetTexture[i]].hasNormMap;
+            devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
+            devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
+            devcon->PSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
+            if(bottlematerial[bottleSubsetTexture[i]].hasTexture)
+                devcon->PSSetShaderResources( 0, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].texArrayIndex] );
+            if(material[bottleSubsetTexture[i]].hasNormMap)
+                devcon->PSSetShaderResources( 1, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].normMapTexArrayIndex] );
+            devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
+
+            devcon->RSSetState(NoCullMode);
+            int indexStart = bottleSubsetIndexStart[i];
+            int indexDrawAmount =  bottleSubsetIndexStart[i+1] - bottleSubsetIndexStart[i];
+            if(!bottlematerial[bottleSubsetTexture[i]].transparent)
+                devcon->DrawIndexed( indexDrawAmount, indexStart, 0 );
+        }
+    }
+
 
     //Draw our model's TRANSPARENT subsets now
 
@@ -1022,35 +1131,39 @@ void InitGraphics() {
     dev->CreateSamplerState( &sampDesc, &CubesTexSamplerState );
 
 
+
     //Do all the setup for the bottles
-    float bottleXPos = -30.0f;
-    float bottleZPos = 30.0f;
-    float bxadd = 0.0f;
-    float bzadd = 0.0f;
-
-    for(int i = 0; i < numBottles; i++)
-    {
-        bottleHit[i] = 0;
-
-        //set the loaded bottles world space
-        bottleWorld[i] = XMMatrixIdentity();
-
-        bxadd++;
-
-        if(bxadd == 10)
-        {
-            bzadd -= 1.0f;
-            bxadd = 0;
-        }
-
-        Rotation = XMMatrixRotationY(3.14f);
-        Scale = XMMatrixScaling( 1.0f, 1.0f, 1.0f );
-        Translation = XMMatrixTranslation( bottleXPos + bxadd*10.0f, 4.0f, bottleZPos + bzadd*10.0f );
-
-        bottleWorld[i] = Rotation * Scale * Translation;
-    }
 
     CreateBoundingVolumes(bottleVertPosArray, bottleBoundingBoxVertPosArray, bottleBoundingBoxVertIndexArray, bottleBoundingSphere, bottleCenterOffset);
+
+    float bottleXPos = -25.0f;
+    float bottleZPos = 50.0f;
+    int rows = 40;
+    int counter = 0;
+
+    for(int j = 0; j < rows; j++)
+    {
+        for(int k = 0; k < rows - j; k++)
+        {
+            bottleHit[counter] = 0;
+
+            // set the loaded bottles world space
+            bottleWorld[counter] = XMMatrixIdentity();
+
+            Translation = XMMatrixTranslation( bottleXPos + k + j*0.5f, j*2.25 + 1, bottleZPos);
+            Rotation = XMMatrixRotationZ(3.14f);
+
+            bottleWorld[counter] = Rotation * Translation;
+
+            //Update the objects AABB every time the object is transformed
+            CalculateAABB(bottleBoundingBoxVertPosArray, bottleWorld[counter], bottleBoundingBoxMinVertex[counter], bottleBoundingBoxMaxVertex[counter]);
+            
+            counter++;
+        }
+    }
+
+
+    
 }
 
 bool InitDirectInput(HINSTANCE hInstance, HWND hwnd) {
@@ -1067,9 +1180,9 @@ bool InitDirectInput(HINSTANCE hInstance, HWND hwnd) {
 
     //Setup mouse
     //This version has mouse invisible
-    // DIMouse->SetCooperativeLevel(hwnd, DISCL_EXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
+    DIMouse->SetCooperativeLevel(hwnd, DISCL_EXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
     //This version has mouse visible. We want it visible for picking
-    DIMouse->SetCooperativeLevel(hwnd, DISCL_NONEXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
+    // DIMouse->SetCooperativeLevel(hwnd, DISCL_NONEXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
 
     return true;
 }
@@ -1109,13 +1222,10 @@ void DetectInput(double time, HWND hwnd)
         moveBackForward -= speed;
     }
     if(keyboardState[DIK_1] & 0x80) {
-        pickWhat = 0;
+        cdMethod = 0;
     }
     if(keyboardState[DIK_2] & 0x80) {
-        pickWhat = 1;
-    }
-    if(keyboardState[DIK_3] & 0x80) {
-        pickWhat = 2;
+        cdMethod = 1;
     }
 
     //Left Mouse Button
@@ -1123,7 +1233,15 @@ void DetectInput(double time, HWND hwnd)
     {
         if(isShoot == false)
         {    
-            POINT mousePos;
+            bottleFlying = true;
+
+            thrownBottleWorld = XMMatrixIdentity();
+            Translation = XMMatrixTranslation( XMVectorGetX(camPosition), XMVectorGetY(camPosition), XMVectorGetZ(camPosition) );
+
+            thrownBottleWorld = Translation;
+            thrownBottleDir = camTarget - camPosition;
+
+            /*POINT mousePos;
 
             //This gets the cursor position on the screen, which if windowed may not be relative to window
             GetCursorPos(&mousePos);  
@@ -1211,7 +1329,7 @@ void DetectInput(double time, HWND hwnd)
                 pickedDist = closestDist;
                 score++;
             }        
-
+*/
             isShoot = true;
         }
     }
@@ -1519,6 +1637,95 @@ void CreateBoundingVolumes(std::vector<XMFLOAT3> &vertPosArray,
 
     for(int j = 0; j < 36; j++)
         boundingBoxIndex.push_back(i[j]);
+}
+
+bool BoundingSphereCollision(float firstObjBoundingSphere, 
+    XMVECTOR firstObjCenterOffset,
+    XMMATRIX& firstObjWorldSpace,
+    float secondObjBoundingSphere,
+    XMVECTOR secondObjCenterOffset, 
+    XMMATRIX& secondObjWorldSpace)
+{
+    //Declare local variables
+    XMVECTOR world_1 = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    XMVECTOR world_2 = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    float objectsDistance = 0.0f;
+
+    //Transform the objects world space to objects REAL center in world space
+    world_1 = XMVector3TransformCoord(firstObjCenterOffset, firstObjWorldSpace);
+    world_2 = XMVector3TransformCoord(secondObjCenterOffset, secondObjWorldSpace);
+
+    //Get the distance between the two objects
+    objectsDistance = XMVectorGetX(XMVector3Length(world_1 - world_2));
+
+    //If the distance between the two objects is less than the sum of their bounding spheres...
+    if(objectsDistance <= (firstObjBoundingSphere + secondObjBoundingSphere))
+        //Return true
+        return true;
+
+    //If the bounding spheres are not colliding, return false
+    return false;
+}
+
+bool BoundingBoxCollision(XMVECTOR& firstObjBoundingBoxMinVertex, 
+    XMVECTOR& firstObjBoundingBoxMaxVertex, 
+    XMVECTOR& secondObjBoundingBoxMinVertex, 
+    XMVECTOR& secondObjBoundingBoxMaxVertex) 
+{
+    //Is obj1's max X greater than obj2's min X? If not, obj1 is to the LEFT of obj2
+    if (XMVectorGetX(firstObjBoundingBoxMaxVertex) > XMVectorGetX(secondObjBoundingBoxMinVertex))
+
+        //Is obj1's min X less than obj2's max X? If not, obj1 is to the RIGHT of obj2
+        if (XMVectorGetX(firstObjBoundingBoxMinVertex) < XMVectorGetX(secondObjBoundingBoxMaxVertex))
+
+            //Is obj1's max Y greater than obj2's min Y? If not, obj1 is UNDER obj2
+            if (XMVectorGetY(firstObjBoundingBoxMaxVertex) > XMVectorGetY(secondObjBoundingBoxMinVertex))
+
+                //Is obj1's min Y less than obj2's max Y? If not, obj1 is ABOVE obj2
+                if (XMVectorGetY(firstObjBoundingBoxMinVertex) < XMVectorGetY(secondObjBoundingBoxMaxVertex)) 
+
+                    //Is obj1's max Z greater than obj2's min Z? If not, obj1 is IN FRONT OF obj2
+                    if (XMVectorGetZ(firstObjBoundingBoxMaxVertex) > XMVectorGetZ(secondObjBoundingBoxMinVertex))
+
+                        //Is obj1's min Z less than obj2's max Z? If not, obj1 is BEHIND obj2
+                        if (XMVectorGetZ(firstObjBoundingBoxMinVertex) < XMVectorGetZ(secondObjBoundingBoxMaxVertex))
+
+                            //If we've made it this far, then the two bounding boxes are colliding
+                            return true;
+
+    //If the two bounding boxes are not colliding, then return false
+    return false;
+}
+
+void CalculateAABB(std::vector<XMFLOAT3> boundingBoxVerts, 
+    XMMATRIX& worldSpace,
+    XMVECTOR& boundingBoxMin,
+    XMVECTOR& boundingBoxMax)
+{
+    XMFLOAT3 minVertex = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);
+    XMFLOAT3 maxVertex = XMFLOAT3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+    //Loop through the 8 vertices describing the bounding box
+    for(UINT i = 0; i < 8; i++)
+    {        
+        //Transform the bounding boxes vertices to the objects world space
+        XMVECTOR Vert = XMVectorSet(boundingBoxVerts[i].x, boundingBoxVerts[i].y, boundingBoxVerts[i].z, 0.0f);
+        Vert = XMVector3TransformCoord(Vert, worldSpace);
+
+        //Get the smallest vertex 
+        minVertex.x = std::min(minVertex.x, XMVectorGetX(Vert));    // Find smallest x value in model
+        minVertex.y = std::min(minVertex.y, XMVectorGetY(Vert));    // Find smallest y value in model
+        minVertex.z = std::min(minVertex.z, XMVectorGetZ(Vert));    // Find smallest z value in model
+
+        //Get the largest vertex 
+        maxVertex.x = std::max(maxVertex.x, XMVectorGetX(Vert));    // Find largest x value in model
+        maxVertex.y = std::max(maxVertex.y, XMVectorGetY(Vert));    // Find largest y value in model
+        maxVertex.z = std::max(maxVertex.z, XMVectorGetZ(Vert));    // Find largest z value in model
+    }
+
+    //Store Bounding Box's min and max vertices
+    boundingBoxMin = XMVectorSet(minVertex.x, minVertex.y, minVertex.z, 0.0f);
+    boundingBoxMax = XMVectorSet(maxVertex.x, maxVertex.y, maxVertex.z, 0.0f);
 }
 
 //This function is copied from the braynar tutorial. Since I wrote my own crappy one in old commit I decided to skip implementing and just copied
