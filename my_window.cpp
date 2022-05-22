@@ -14,6 +14,7 @@
 #include <fstream>
 #include <istream>
 #include <string>
+#include <algorithm>
 
 // include the basic windows header files and the Direct3D header files
 #include <windows.h>
@@ -161,9 +162,6 @@ std::vector<DWORD> bottleVertIndexArray;
 int bottleSubsets = 0;
 std::vector<int> bottleSubsetIndexStart;
 std::vector<int> bottleSubsetTexture;
-XMMATRIX bottleWorld[20];
-int* bottleHit = new int[20];
-int numBottles = 20;
 
 //Global Variables
 
@@ -176,6 +174,22 @@ int score = 0;
 float pickedDist = 0.0f;
 
 //---------------------------
+//Bounding Volumes
+XMMATRIX bottleWorld[1000];
+int* bottleHit = new int[1000];
+int numBottles = 1000;
+
+float bottleBoundingSphere = 0.0f;
+std::vector<XMFLOAT3> bottleBoundingBoxVertPosArray;
+std::vector<DWORD> bottleBoundingBoxVertIndexArray;
+XMVECTOR bottleCenterOffset;
+
+int pickWhat = 0;
+
+double pickOpSpeed = 0.0f;
+
+bool isPDown = false;
+//----------------------------
 
 
 // function prototypes
@@ -213,6 +227,11 @@ float pick(XMVECTOR pickRayInWorldSpacePos,
     std::vector<DWORD>& indexPosArray,
     XMMATRIX& worldSpace);
 bool PointInTriangle(XMVECTOR& triV1, XMVECTOR& triV2, XMVECTOR& triV3, XMVECTOR& point );
+void CreateBoundingVolumes(std::vector<XMFLOAT3> &vertPosArray,    // The array containing our models vertex positions
+    std::vector<XMFLOAT3>& boundingBoxVerts,                            // Array we want to store the bounding box's vertex positions
+    std::vector<DWORD>& boundingBoxIndex,                            // This is our bounding box's index array
+    float &boundingSphere,                                            // The float containing the radius of our bounding sphere
+    XMVECTOR &objectCenterOffset);                                    // A vector containing the distance between the models actual center and (0, 0, 0) in model space
 
 struct Vertex    //Overloaded Vertex Structure
 {
@@ -387,11 +406,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 void drawstuff(std::wstring text, int inInt) {
         static const WCHAR sc_helloWorld[] = L"Hello, World!";
+
+    // Display which picking method we are doing
+    std::wstring pickWhatStr;
+    if(pickWhat == 0)
+        pickWhatStr = L"Bounding Sphere";
+    if(pickWhat == 1)
+        pickWhatStr = L"Bounding Box";
+    if(pickWhat == 2)
+        pickWhatStr = L"Model";
+
         std::wostringstream printString;
         printString << text << inInt << "\nPitch: " << camPitch << "\n" 
         << "LightPos: " << light.pos.x << "," << light.pos.y << ", " << light.pos.z << "\n"
         << "Score: " << score << "\n"
-        << "Picked Dist: " << pickedDist;;
+        << "Picked Dist: " << pickedDist << "\n"
+        << L"Pick Operation Speed: " << pickOpSpeed << L"\n"
+        << L"Picking Method (P): " << pickWhatStr;
         std::wstring printText = printString.str();
 
         // Retrieve the size of the render target.
@@ -1018,6 +1049,8 @@ void InitGraphics() {
 
         bottleWorld[i] = Rotation * Scale * Translation;
     }
+
+    CreateBoundingVolumes(bottleVertPosArray, bottleBoundingBoxVertPosArray, bottleBoundingBoxVertIndexArray, bottleBoundingSphere, bottleCenterOffset);
 }
 
 bool InitDirectInput(HINSTANCE hInstance, HWND hwnd) {
@@ -1075,6 +1108,15 @@ void DetectInput(double time, HWND hwnd)
     {
         moveBackForward -= speed;
     }
+    if(keyboardState[DIK_1] & 0x80) {
+        pickWhat = 0;
+    }
+    if(keyboardState[DIK_2] & 0x80) {
+        pickWhat = 1;
+    }
+    if(keyboardState[DIK_3] & 0x80) {
+        pickWhat = 2;
+    }
 
     //Left Mouse Button
     if(mouseCurrState.rgbButtons[0])
@@ -1083,9 +1125,9 @@ void DetectInput(double time, HWND hwnd)
         {    
             POINT mousePos;
 
-            //This gets the position of the mouse on the monitor
-            GetCursorPos(&mousePos);   
-            //If it is windowed, this position is not necessarily bound to the window size. This corrects for that         
+            //This gets the cursor position on the screen, which if windowed may not be relative to window
+            GetCursorPos(&mousePos);  
+            //This function accomodates for that.           
             ScreenToClient(hwnd, &mousePos);
 
             int mousex = mousePos.x;
@@ -1098,11 +1140,60 @@ void DetectInput(double time, HWND hwnd)
             XMVECTOR prwsPos, prwsDir;
             pickRayVector(mousex, mousey, prwsPos, prwsDir);
 
+            double pickOpStartTime = GetTime();        // Get the time before we start our picking operation
+
             for(int i = 0; i < numBottles; i++)
             {
-                if(bottleHit[i] == 0) //No need to check bottles already hit
-                {
-                    tempDist = pick(prwsPos, prwsDir, bottleVertPosArray, bottleVertIndexArray, bottleWorld[i]);
+                if(bottleHit[i] == 0) // No need to check bottles already hit
+                {        
+                    tempDist = FLT_MAX;
+
+                    if(pickWhat == 0)
+                    {                        
+                        float pRToPointDist = 0.0f; // Closest distance from the pick ray to the objects center
+
+                        XMVECTOR bottlePos = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+                        XMVECTOR pOnLineNearBottle = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+
+                        // For the Bounding Sphere to work correctly, we need to make sure we are testing
+                        // the distance from the objects "actual" center and the pick ray. We have stored
+                        // the distance from (0, 0, 0) in the objects model space to the object "actual"
+                        // center in bottleCenterOffset. So now we just need to add that difference to
+                        // the bottles world space position, this way the bounding sphere will be centered
+                        // on the object real center.
+                        bottlePos = XMVector3TransformCoord(bottlePos, bottleWorld[i]) + bottleCenterOffset;
+
+                        // This equation gets the point on the pick ray which is closest to bottlePos
+                        pOnLineNearBottle = prwsPos + XMVector3Dot((bottlePos - prwsPos), prwsDir) / XMVector3Dot(prwsDir, prwsDir) * prwsDir;
+
+                        // Now we get the distance between bottlePos and pOnLineNearBottle
+                        // This line is slightly less accurate, but it offers a performance increase by
+                        // estimating the distance using XMVector3LengthEst()
+                        //pRToPointDist = XMVectorGetX(XMVector3LengthEst(pOnLineNearBottle - bottlePos));                
+                        pRToPointDist = XMVectorGetX(XMVector3Length(pOnLineNearBottle - bottlePos));
+
+                        // If the distance between the closest point on the pick ray (pOnLineNearBottle) to bottlePos
+                        // is less than the bottles bounding sphere (represented by a float called bottleBoundingSphere)
+                        // then we know the pick ray has intersected with the bottles bounding sphere, and we can move on
+                        // to testing if the pick ray has actually intersected with the bottle itself.
+                        if(pRToPointDist < bottleBoundingSphere)
+                        {
+                            // This line is the distance to the pick ray intersection with the sphere
+                            //tempDist = XMVectorGetX(XMVector3Length(pOnLineNearBottle - prwsPos));
+
+                            // Check for picking with the actual model now
+                            tempDist = pick(prwsPos, prwsDir, bottleVertPosArray, bottleVertIndexArray, bottleWorld[i]);
+                        }
+                    }
+
+                    // Bounding Box picking test
+                    if(pickWhat == 1)
+                        tempDist = pick(prwsPos, prwsDir, bottleBoundingBoxVertPosArray, bottleBoundingBoxVertIndexArray, bottleWorld[i]);
+
+                    // Check for picking directly with the model without bounding volumes testing first
+                    if(pickWhat == 2)
+                        tempDist = pick(prwsPos, prwsDir, bottleVertPosArray, bottleVertIndexArray, bottleWorld[i]);
+
                     if(tempDist < closestDist)
                     {
                         closestDist = tempDist;
@@ -1111,12 +1202,15 @@ void DetectInput(double time, HWND hwnd)
                 }
             }
 
+            // This is the time in seconds it took to complete the picking process
+            pickOpSpeed = GetTime() - pickOpStartTime;
+
             if(closestDist < FLT_MAX)
             {
                 bottleHit[hitIndex] = 1;
                 pickedDist = closestDist;
                 score++;
-            }
+            }        
 
             isShoot = true;
         }
@@ -1344,6 +1438,87 @@ bool PointInTriangle(XMVECTOR& triV1, XMVECTOR& triV2, XMVECTOR& triV3, XMVECTOR
             return false;
     }
     return false;
+}
+
+void CreateBoundingVolumes(std::vector<XMFLOAT3> &vertPosArray,
+    std::vector<XMFLOAT3>& boundingBoxVerts,
+    std::vector<DWORD>& boundingBoxIndex,
+    float &boundingSphere,
+    XMVECTOR &objectCenterOffset)
+{
+    XMFLOAT3 minVertex = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);
+    XMFLOAT3 maxVertex = XMFLOAT3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+    for(UINT i = 0; i < vertPosArray.size(); i++)
+    {        
+        // The minVertex and maxVertex will most likely not be actual vertices in the model, but vertices
+        // that use the smallest and largest x, y, and z values from the model to be sure ALL vertices are
+        // covered by the bounding volume
+
+        //Get the smallest vertex 
+        minVertex.x = std::min(minVertex.x, vertPosArray[i].x);    // Find smallest x value in model
+        minVertex.y = std::min(minVertex.y, vertPosArray[i].y);    // Find smallest y value in model
+        minVertex.z = std::min(minVertex.z, vertPosArray[i].z);    // Find smallest z value in model
+
+        //Get the largest vertex 
+        maxVertex.x = std::max(maxVertex.x, vertPosArray[i].x);    // Find largest x value in model
+        maxVertex.y = std::max(maxVertex.y, vertPosArray[i].y);    // Find largest y value in model
+        maxVertex.z = std::max(maxVertex.z, vertPosArray[i].z);    // Find largest z value in model
+    }
+
+    // Compute distance between maxVertex and minVertex
+    float distX = (maxVertex.x - minVertex.x) / 2.0f;
+    float distY = (maxVertex.y - minVertex.y) / 2.0f;
+    float distZ = (maxVertex.z - minVertex.z) / 2.0f;    
+
+    // Now store the distance between (0, 0, 0) in model space to the models real center
+    objectCenterOffset = XMVectorSet(maxVertex.x - distX, maxVertex.y - distY, maxVertex.z - distZ, 0.0f);
+
+    // Compute bounding sphere (distance between min and max bounding box vertices)
+    // boundingSphere = sqrt(distX*distX + distY*distY + distZ*distZ) / 2.0f;
+    boundingSphere = XMVectorGetX(XMVector3Length(XMVectorSet(distX, distY, distZ, 0.0f)));    
+
+    // Create bounding box    
+    // Front Vertices
+    boundingBoxVerts.push_back(XMFLOAT3(minVertex.x, minVertex.y, minVertex.z));
+    boundingBoxVerts.push_back(XMFLOAT3(minVertex.x, maxVertex.y, minVertex.z));
+    boundingBoxVerts.push_back(XMFLOAT3(maxVertex.x, maxVertex.y, minVertex.z));
+    boundingBoxVerts.push_back(XMFLOAT3(maxVertex.x, minVertex.y, minVertex.z));
+
+    // Back Vertices
+    boundingBoxVerts.push_back(XMFLOAT3(minVertex.x, minVertex.y, maxVertex.z));
+    boundingBoxVerts.push_back(XMFLOAT3(maxVertex.x, minVertex.y, maxVertex.z));
+    boundingBoxVerts.push_back(XMFLOAT3(maxVertex.x, maxVertex.y, maxVertex.z));
+    boundingBoxVerts.push_back(XMFLOAT3(minVertex.x, maxVertex.y, maxVertex.z));
+
+    DWORD* i = new DWORD[36];
+
+    // Front Face
+    i[0] = 0; i[1] = 1; i[2] = 2;
+    i[3] = 0; i[4] = 2; i[5] = 3;
+
+    // Back Face
+    i[6] = 4; i[7]  = 5; i[8]  = 6;
+    i[9] = 4; i[10] = 6; i[11] = 7;
+
+    // Top Face
+    i[12] = 1; i[13] = 7; i[14] = 6;
+    i[15] = 1; i[16] = 6; i[17] = 2;
+
+    // Bottom Face
+    i[18] = 0; i[19] = 4; i[20] = 5;
+    i[21] = 0; i[22] = 5; i[23] = 3;
+
+    // Left Face
+    i[24] = 4; i[25] = 7; i[26] = 1;
+    i[27] = 4; i[28] = 1; i[29] = 0;
+
+    // Right Face
+    i[30] = 3; i[31] = 2; i[32] = 6;
+    i[33] = 3; i[34] = 6; i[35] = 5;
+
+    for(int j = 0; j < 36; j++)
+        boundingBoxIndex.push_back(i[j]);
 }
 
 //This function is copied from the braynar tutorial. Since I wrote my own crappy one in old commit I decided to skip implementing and just copied
