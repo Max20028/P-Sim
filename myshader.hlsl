@@ -63,6 +63,9 @@ float4 PShader(VOut input) : SV_TARGET
     float4 diffuse = difColor;
     // diffuse = float4(0.5f, 0.5f, 0.5f, 1.0f);
 
+    if(input.normal.g < 0.0f)
+        return float4(0.0f, 0.0f, 0.0f, 1.0f);
+
     //If material has a diffuse texture map, set it now
     if(hasTexture == true)
         diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
