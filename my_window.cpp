@@ -316,8 +316,16 @@ bool isCDown = false;
 //----------------------------
 //MD5 Modeling
 
-XMMATRIX smilesWorld;
+XMMATRIX playerCharWorld;
 Model3D NewMD5Model;
+
+//----------------------------
+//Third Person Camera
+XMVECTOR currCharDirection = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+XMVECTOR oldCharDirection = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+XMVECTOR charPosition = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+
+float charCamDist = 15.0f;
 
 //----------------------------
 
@@ -383,6 +391,7 @@ bool LoadMD5Model(std::wstring filename,
     std::vector<std::wstring> texFileNameArray);
 bool LoadMD5Anim(std::wstring filename,    Model3D& MD5Model);
 void UpdateMD5Model(Model3D& MD5Model, float deltaTime, int animation);
+void MoveChar(double time, XMVECTOR& destinationDirection, XMMATRIX& worldMatrix);
 
 
 
@@ -595,9 +604,9 @@ void UpdateScene(double time){
     light.pos.y = XMVectorGetY(camPosition);
     light.pos.z = XMVectorGetZ(camPosition);
 
-    light.dir.x = XMVectorGetX(camTarget) - light.pos.x;
-    light.dir.y = XMVectorGetY(camTarget) - light.pos.y;
-    light.dir.z = XMVectorGetZ(camTarget) - light.pos.z;
+    // light.dir.x = XMVectorGetX(camTarget) - light.pos.x;
+    // light.dir.y = XMVectorGetY(camTarget) - light.pos.y;
+    // light.dir.z = XMVectorGetZ(camTarget) - light.pos.z;
 
     meshWorld = XMMatrixIdentity();
 
@@ -899,76 +908,6 @@ void RenderFrame(void) {
             devcon->DrawIndexed( indexDrawAmount, indexStart, 0 );
     }
 
-    //draw bottle's nontransparent subsets
-    for(int j = 0; j < numBottles; j++)
-    {
-        if(bottleHit[j] == 0)
-        {
-            for(int i = 0; i < bottleSubsets; ++i)
-            {
-                //Set the grounds index buffer
-                devcon->IASetIndexBuffer( bottleIndexBuff, DXGI_FORMAT_R32_UINT, 0);
-                //Set the grounds vertex buffer
-                devcon->IASetVertexBuffers( 0, 1, &bottleVertBuff, &stride, &offset );
-
-                //Set the WVP matrix and send it to the constant buffer in effect file
-                WVP = bottleWorld[j] * camView * camProjection;
-                cbPerObj.WVP = XMMatrixTranspose(WVP);    
-                cbPerObj.World = XMMatrixTranspose(bottleWorld[j]);    
-                cbPerObj.difColor = bottlematerial[bottleSubsetTexture[i]].difColor;
-                cbPerObj.hasTexture = bottlematerial[bottleSubsetTexture[i]].hasTexture;
-                cbPerObj.hasNormMap = bottlematerial[bottleSubsetTexture[i]].hasNormMap;
-                devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
-                devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
-                devcon->PSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
-                if(bottlematerial[bottleSubsetTexture[i]].hasTexture)
-                    devcon->PSSetShaderResources( 0, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].texArrayIndex] );
-                if(bottlematerial[bottleSubsetTexture[i]].hasNormMap)
-                    devcon->PSSetShaderResources( 1, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].normMapTexArrayIndex] );
-                devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
-
-                devcon->RSSetState(NoCullMode);
-                int indexStart = bottleSubsetIndexStart[i];
-                int indexDrawAmount =  bottleSubsetIndexStart[i+1] - bottleSubsetIndexStart[i];
-                if(!bottlematerial[bottleSubsetTexture[i]].transparent)
-                    devcon->DrawIndexed( indexDrawAmount, indexStart, 0 );
-            }
-        }
-    }
-
-        if(bottleFlying)
-    {
-        for(int i = 0; i < bottleSubsets; ++i)
-        {
-            // Set the grounds index buffer
-            devcon->IASetIndexBuffer( bottleIndexBuff, DXGI_FORMAT_R32_UINT, 0);
-            // Set the grounds vertex buffer
-            devcon->IASetVertexBuffers( 0, 1, &bottleVertBuff, &stride, &offset );
-
-            // Set the WVP matrix and send it to the constant buffer in effect file
-            WVP = thrownBottleWorld * camView * camProjection;
-            cbPerObj.WVP = XMMatrixTranspose(WVP);    
-            cbPerObj.World = XMMatrixTranspose(thrownBottleWorld);    
-            cbPerObj.difColor = bottlematerial[bottleSubsetTexture[i]].difColor;
-            cbPerObj.hasTexture = bottlematerial[bottleSubsetTexture[i]].hasTexture;
-            cbPerObj.hasNormMap = bottlematerial[bottleSubsetTexture[i]].hasNormMap;
-            devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
-            devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
-            devcon->PSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
-            if(bottlematerial[bottleSubsetTexture[i]].hasTexture)
-                devcon->PSSetShaderResources( 0, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].texArrayIndex] );
-            if(material[bottleSubsetTexture[i]].hasNormMap)
-                devcon->PSSetShaderResources( 1, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].normMapTexArrayIndex] );
-            devcon->PSSetSamplers( 0, 1, &CubesTexSamplerState );
-
-            devcon->RSSetState(NoCullMode);
-            int indexStart = bottleSubsetIndexStart[i];
-            int indexDrawAmount =  bottleSubsetIndexStart[i+1] - bottleSubsetIndexStart[i];
-            if(!bottlematerial[bottleSubsetTexture[i]].transparent)
-                devcon->DrawIndexed( indexDrawAmount, indexStart, 0 );
-        }
-    }
-
     ///***Draw MD5 Model***///
     for(int i = 0; i < NewMD5Model.numSubsets; i ++)
     {
@@ -978,9 +917,9 @@ void RenderFrame(void) {
         devcon->IASetVertexBuffers( 0, 1, &NewMD5Model.subsets[i].vertBuff, &stride, &offset );
 
         //Set the WVP matrix and send it to the constant buffer in effect file
-        WVP = smilesWorld * camView * camProjection;
+        WVP = playerCharWorld * camView * camProjection;
         cbPerObj.WVP = XMMatrixTranspose(WVP);    
-        cbPerObj.World = XMMatrixTranspose(smilesWorld);    
+        cbPerObj.World = XMMatrixTranspose(playerCharWorld);    
         cbPerObj.hasTexture = true;        // We'll assume all md5 subsets have textures
         cbPerObj.hasNormMap = false;    // We'll also assume md5 models have no normal map (easy to change later though)
         devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
@@ -1136,17 +1075,17 @@ void InitGraphics() {
     // light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
     // light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     //Configure the Directional Light
-    // light.dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
-    // light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-    // light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-    //Configure the Spotlight
-    light.pos = XMFLOAT3(0.0f, 1.0f, 0.0f);
-    light.dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
-    light.range = 1000.0f;
-    light.cone = 20.0f;
-    light.att = XMFLOAT3(0.4f, 0.02f, 0.0f);
-    light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+    light.dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    light.ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
     light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    //Configure the Spotlight
+    // light.pos = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    // light.dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+    // light.range = 1000.0f;
+    // light.cone = 20.0f;
+    // light.att = XMFLOAT3(0.4f, 0.02f, 0.0f);
+    // light.ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+    // light.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     printf("C");
 
@@ -1229,9 +1168,13 @@ void InitGraphics() {
 
     devcon->RSSetState(WireFrame);
 
-   //Setup camera
-    camPosition = XMVectorSet( 0.0f, 3.0f, -8.0f, 0.0f );
-    camTarget = XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f );
+    // Scale = XMMatrixScaling( 0.25f, 0.25f, 0.25f );
+    // Translation = XMMatrixTranslation( 0.0f, 0.0f, 0.0f);
+    // playerCharWorld = Scale * Translation;
+
+    //Camera information
+    camPosition = XMVectorSet( 0.0f, 10.0f, 8.0f, 0.0f );
+    camTarget = XMVectorSet( 0.0f, 3.0f, 0.0f, 0.0f );
     camUp = XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
 
     camView = XMMatrixLookAtLH( camPosition, camTarget, camUp );
@@ -1258,7 +1201,7 @@ void InitGraphics() {
 
     Scale = XMMatrixScaling( 0.04f, 0.04f, 0.04f );            // The model is a bit too large for our scene, so make it smaller
     Translation = XMMatrixTranslation( 0.0f, 3.0f, 0.0f );
-    smilesWorld = Scale * Translation;
+    playerCharWorld = Scale * Translation;
 
     printf("E\n");
     D3D11_SAMPLER_DESC sampDesc;
@@ -1346,159 +1289,46 @@ void DetectInput(double time, HWND hwnd)
     if(keyboardState[DIK_ESCAPE] & 0x80)
         PostMessage(hwnd, WM_DESTROY, 0, 0);
 
-    float speed = 15.0f * time;
+    float speed = 10.0f * time;    
+    bool moveChar = false;
+    XMVECTOR desiredCharDir = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
 
     if(keyboardState[DIK_A] & 0x80)
     {
-        moveLeftRight -= speed;
+        desiredCharDir += (camRight);
+        moveChar = true;
     }
     if(keyboardState[DIK_D] & 0x80)
     {
-        moveLeftRight += speed;
+        desiredCharDir += -(camRight);
+        moveChar = true;
     }
     if(keyboardState[DIK_W] & 0x80)
     {
-        moveBackForward += speed;
+        desiredCharDir += (camForward);
+        moveChar = true;
     }
     if(keyboardState[DIK_S] & 0x80)
     {
-        moveBackForward -= speed;
+        desiredCharDir += -(camForward);
+        moveChar = true;
     }
-    if(keyboardState[DIK_1] & 0x80) {
-        cdMethod = 0;
-    }
-    if(keyboardState[DIK_2] & 0x80) {
-        cdMethod = 1;
-    }
-    if(keyboardState[DIK_R] & 0X80)
-    {
-        float timeFactor = 1.0f;    // You can speed up or slow down time by changing this
-        UpdateMD5Model(NewMD5Model, time*timeFactor, 0);
-    }
-
-    //Left Mouse Button
-    if(mouseCurrState.rgbButtons[0])
-    {
-        if(isShoot == false)
-        {    
-            bottleFlying = true;
-
-            thrownBottleWorld = XMMatrixIdentity();
-            Translation = XMMatrixTranslation( XMVectorGetX(camPosition), XMVectorGetY(camPosition), XMVectorGetZ(camPosition) );
-
-            thrownBottleWorld = Translation;
-            thrownBottleDir = camTarget - camPosition;
-
-            /*POINT mousePos;
-
-            //This gets the cursor position on the screen, which if windowed may not be relative to window
-            GetCursorPos(&mousePos);  
-            //This function accomodates for that.           
-            ScreenToClient(hwnd, &mousePos);
-
-            int mousex = mousePos.x;
-            int mousey = mousePos.y;        
-
-            float tempDist;
-            float closestDist = FLT_MAX;
-            int hitIndex;
-
-            XMVECTOR prwsPos, prwsDir;
-            pickRayVector(mousex, mousey, prwsPos, prwsDir);
-
-            double pickOpStartTime = GetTime();        // Get the time before we start our picking operation
-
-            for(int i = 0; i < numBottles; i++)
-            {
-                if(bottleHit[i] == 0) // No need to check bottles already hit
-                {        
-                    tempDist = FLT_MAX;
-
-                    if(pickWhat == 0)
-                    {                        
-                        float pRToPointDist = 0.0f; // Closest distance from the pick ray to the objects center
-
-                        XMVECTOR bottlePos = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-                        XMVECTOR pOnLineNearBottle = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-
-                        // For the Bounding Sphere to work correctly, we need to make sure we are testing
-                        // the distance from the objects "actual" center and the pick ray. We have stored
-                        // the distance from (0, 0, 0) in the objects model space to the object "actual"
-                        // center in bottleCenterOffset. So now we just need to add that difference to
-                        // the bottles world space position, this way the bounding sphere will be centered
-                        // on the object real center.
-                        bottlePos = XMVector3TransformCoord(bottlePos, bottleWorld[i]) + bottleCenterOffset;
-
-                        // This equation gets the point on the pick ray which is closest to bottlePos
-                        pOnLineNearBottle = prwsPos + XMVector3Dot((bottlePos - prwsPos), prwsDir) / XMVector3Dot(prwsDir, prwsDir) * prwsDir;
-
-                        // Now we get the distance between bottlePos and pOnLineNearBottle
-                        // This line is slightly less accurate, but it offers a performance increase by
-                        // estimating the distance using XMVector3LengthEst()
-                        //pRToPointDist = XMVectorGetX(XMVector3LengthEst(pOnLineNearBottle - bottlePos));                
-                        pRToPointDist = XMVectorGetX(XMVector3Length(pOnLineNearBottle - bottlePos));
-
-                        // If the distance between the closest point on the pick ray (pOnLineNearBottle) to bottlePos
-                        // is less than the bottles bounding sphere (represented by a float called bottleBoundingSphere)
-                        // then we know the pick ray has intersected with the bottles bounding sphere, and we can move on
-                        // to testing if the pick ray has actually intersected with the bottle itself.
-                        if(pRToPointDist < bottleBoundingSphere)
-                        {
-                            // This line is the distance to the pick ray intersection with the sphere
-                            //tempDist = XMVectorGetX(XMVector3Length(pOnLineNearBottle - prwsPos));
-
-                            // Check for picking with the actual model now
-                            tempDist = pick(prwsPos, prwsDir, bottleVertPosArray, bottleVertIndexArray, bottleWorld[i]);
-                        }
-                    }
-
-                    // Bounding Box picking test
-                    if(pickWhat == 1)
-                        tempDist = pick(prwsPos, prwsDir, bottleBoundingBoxVertPosArray, bottleBoundingBoxVertIndexArray, bottleWorld[i]);
-
-                    // Check for picking directly with the model without bounding volumes testing first
-                    if(pickWhat == 2)
-                        tempDist = pick(prwsPos, prwsDir, bottleVertPosArray, bottleVertIndexArray, bottleWorld[i]);
-
-                    if(tempDist < closestDist)
-                    {
-                        closestDist = tempDist;
-                        hitIndex = i;
-                    }
-                }
-            }
-
-            // This is the time in seconds it took to complete the picking process
-            pickOpSpeed = GetTime() - pickOpStartTime;
-
-            if(closestDist < FLT_MAX)
-            {
-                bottleHit[hitIndex] = 1;
-                pickedDist = closestDist;
-                score++;
-            }        
-*/
-            isShoot = true;
-        }
-    }
-    if(!mouseCurrState.rgbButtons[0])
-    {
-        isShoot = false;
-    }
-
-
     if((mouseCurrState.lX != mouseLastState.lX) || (mouseCurrState.lY != mouseLastState.lY))
     {
-        camYaw += mouseLastState.lX * 0.001f;
+        camYaw += mouseLastState.lX * 0.002f;
 
-        camPitch += mouseCurrState.lY * 0.001f;
-        if(abs(camPitch) > 1.57) {
-            if(camPitch > 0) camPitch = 1.57;
-            else camPitch = -1.57;
-        }
+        camPitch += mouseCurrState.lY * 0.002f;
+        // Check that the camera doesn't go over the top or under the player
+        if(camPitch > 0.85f)
+            camPitch = 0.85f;
+        if(camPitch < -0.85f)
+            camPitch = -0.85f;
 
         mouseLastState = mouseCurrState;
     }
+
+    if(moveChar == true)
+        MoveChar(time, desiredCharDir, playerCharWorld);
 
     UpdateCamera();
 
@@ -1534,24 +1364,67 @@ double GetFrameTime() {
 
 void UpdateCamera()
 {
-    camRotationMatrix = XMMatrixRotationRollPitchYaw(camPitch, camYaw, 0);
+    // Rotate target around camera
+    /*camRotationMatrix = XMMatrixRotationRollPitchYaw(camPitch, camYaw, 0);
     camTarget = XMVector3TransformCoord(DefaultForward, camRotationMatrix );
-    camTarget = XMVector3Normalize(camTarget);
+    camTarget = XMVector3Normalize(camTarget);*/
 
-    XMMATRIX RotateYTempMatrix;
+    /*XMMATRIX RotateYTempMatrix;
     RotateYTempMatrix = XMMatrixRotationY(camYaw);
 
+    // Walk
     camRight = XMVector3TransformCoord(DefaultRight, RotateYTempMatrix);
-    camUp = XMVector3TransformCoord(camUp, RotateYTempMatrix);
     camForward = XMVector3TransformCoord(DefaultForward, RotateYTempMatrix);
+    camUp = XMVector3Cross(camForward, camRight);*/
 
-    camPosition += moveLeftRight*camRight;
+    /*// Free Cam
+    camRight = XMVector3TransformCoord(DefaultRight, camRotationMatrix);
+    camForward = XMVector3TransformCoord(DefaultForward, camRotationMatrix);
+    camUp = XMVector3Cross(camForward, camRight);*/
+
+    /*camPosition += moveLeftRight*camRight;
     camPosition += moveBackForward*camForward;
 
     moveLeftRight = 0.0f;
     moveBackForward = 0.0f;
 
-    camTarget = camPosition + camTarget;    
+    camTarget = camPosition + camTarget;*/
+
+    // Third Person Camera
+    // Set the cameras target to be looking at the character.
+    camTarget = charPosition;
+
+    // This line is because this lessons model was set to stand on the point (0,0,0) (my bad), and we
+    // don't want to just be looking at the models feet, so we move the camera's target vector up 5 units
+    camTarget = XMVectorSetY(camTarget, XMVectorGetY(camTarget)+5.0f);    
+
+    // Unlike before, when we rotated the cameras target vector around the cameras position,
+    // we are now rotating the cameras position around it's target (which is the character)
+    // Rotate camera around target
+    camRotationMatrix = XMMatrixRotationRollPitchYaw(-camPitch, camYaw, 0);
+    camPosition = XMVector3TransformNormal(DefaultForward, camRotationMatrix );
+    camPosition = XMVector3Normalize(camPosition);
+
+    // Set our cameras position to rotate around the character. We need to add 5 to the characters
+    // position's y axis because i'm stupid and modeled the character in the 3d modeling program
+    // to be "standing" on (0,0,0), instead of centered around it ;) Well target her head here though
+    camPosition = (camPosition * charCamDist) + camTarget;
+
+    // We need to set our cameras forward and right vectors to lay
+    // in the worlds xz plane, since they are the vectors we will
+    // be using to determine the direction our character is running
+    camForward = XMVector3Normalize(camTarget - camPosition);    // Get forward vector based on target
+    camForward = XMVectorSetY(camForward, 0.0f);    // set forwards y component to 0 so it lays only on
+    // the xz plane
+    camForward = XMVector3Normalize(camForward);
+    // To get our camera's Right vector, we set it's x component to the negative z component from the
+    // camera's forward vector, and the z component to the camera forwards x component
+    camRight = XMVectorSet(-XMVectorGetZ(camForward), 0.0f, XMVectorGetX(camForward), 0.0f);
+
+    // Our camera does not "roll", so we can safely assume that the cameras right vector is always
+    // in the xz plane, so to get the up vector, we just get the normalized vector from the camera
+    // position to the cameras target, and cross it with the camera's Right vector
+    camUp = XMVector3Cross(XMVector3Normalize(camPosition - camTarget), camRight);
 
     camView = XMMatrixLookAtLH( camPosition, camTarget, camUp );
 }
@@ -1874,6 +1747,63 @@ void CalculateAABB(std::vector<XMFLOAT3> boundingBoxVerts,
     //Store Bounding Box's min and max vertices
     boundingBoxMin = XMVectorSet(minVertex.x, minVertex.y, minVertex.z, 0.0f);
     boundingBoxMax = XMVectorSet(maxVertex.x, maxVertex.y, maxVertex.z, 0.0f);
+}
+
+void MoveChar(double time, XMVECTOR& destinationDirection, XMMATRIX& worldMatrix)
+{
+    // Normalize our destinated direction vector
+    destinationDirection = XMVector3Normalize(destinationDirection);
+
+    // If character is currently facing the complete opposite direction as the desired direction
+    // they will turn around VERY slowly, so we want to make sure they turn around at a normal speed
+    // by making the old character direction not the exact opposite direction as the current character
+    // position. Try commenting out the next two lines to see what i'm talking about
+    if(XMVectorGetX(XMVector3Dot(destinationDirection, oldCharDirection)) == -1)
+        oldCharDirection += XMVectorSet(0.02f, 0.0f, -0.02f, 0.0f);
+
+    // Get our current characters position in the world, from it's world matrix
+    charPosition = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    charPosition = XMVector3TransformCoord(charPosition, worldMatrix);
+
+    // Rotate our character smoothly when changing direction (from the GPG series)
+    float destDirLength = 10.0f * frameTime;        // Change to the speed you want your character to rotate. This uses the game timer from an earlier lesson
+                                                // The larget this value, the faster the character rotates
+    currCharDirection = oldCharDirection + (destinationDirection * destDirLength);    // Get the characters direction (based off time, old position, and desired
+                                            // direction), by adding together the current direction and the old direction
+                                        // to get vector that smoothly turns from oldCharDir to denstinationDirection
+
+currCharDirection = XMVector3Normalize(currCharDirection);        // Normalize the characters current direction vector
+
+// Here we find the angle of our character (angle between current direction and world's normal vector), used so that we can actually rotate
+// our characters world matrix. The three lines below, together, find the angle between 0 PI and 2 PI (360 degrees, and technically, it returns
+// the degrees in radians from -1 PI to 1 PI, but that has the same effect as 0 PI to 2 PI) between two vectors.
+// XMVector3AngleBetweenNormals returns an angle between two vectors, but always a positive result between
+// 0 and 1 PI. Which means, it doesn't tell us which half of the 2 PI degrees that are possible. So, we have the next if statement below,
+// which crosses the current characters direction and the worlds forward (0,0,1), which should give us the y axis vector (assuming that our character
+// rotates on the xz plane). We check to see if the y vector is positive ( > 0.0f), and if it is, we set the characters direction angle to be
+// the opposite of what it currently is, giving us the result in -1 PI to 1 PI.
+float charDirAngle = XMVectorGetX(XMVector3AngleBetweenNormals( XMVector3Normalize(currCharDirection), XMVector3Normalize(DefaultForward)));
+if(XMVectorGetY(XMVector3Cross(currCharDirection, DefaultForward)) > 0.0f)
+    charDirAngle = -charDirAngle;
+
+// Now we update our characters position based off the frame time, his old position, and the direction he is facing
+float speed = 15.0f * frameTime;
+charPosition = charPosition + (destinationDirection * speed);
+
+// Update characters world matrix
+XMMATRIX rotationMatrix;
+Scale = XMMatrixScaling( 0.04f, 0.04f, 0.04f );
+Translation = XMMatrixTranslation(XMVectorGetX(charPosition), 0.0f, XMVectorGetZ(charPosition) );
+rotationMatrix = XMMatrixRotationY(charDirAngle - 3.14159265f);        // Subtract PI from angle so the character doesn't run backwards
+
+worldMatrix = Scale * rotationMatrix * Translation;
+
+// Set the characters old direction
+oldCharDirection = currCharDirection;                                                                    
+
+// Update our animation
+float timeFactor = 1.0f;    // You can speed up or slow down time by changing this
+UpdateMD5Model(NewMD5Model, time*timeFactor, 0);
 }
 
 //This function is copied from the braynar tutorial. Since I wrote my own crappy one in old commit I decided to skip implementing and just copied
