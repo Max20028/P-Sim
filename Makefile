@@ -19,16 +19,14 @@ all: output
 debug: CFLAGS += -DDEBUG
 debug: output
 
-output:  main WICTextureLoader
-	$(CC) $(CFLAGS) -o output my_window.o WicTextureLoader.o $(LIBFLAGS)
+output:  main
+	$(CC) $(CFLAGS) -o output windowsmain.o DirectXRender.o $(LIBFLAGS)
 
+main: renderer
+	$(CC) $(CFLAGS) -c windowsmain.cpp
 
-main:  
-	$(CC) $(CFLAGS) -c my_window.cpp
-
-WICTextureLoader:
-	$(CC) $(CFLAGS) -c "headers\WicTextureLoader.cpp"
-
+renderer: 
+	$(CC) $(CFLAGS) -c Graphics/DirectXRender.cpp
 	
 
 

@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+<project version="2">
+	<pipeline>
+		<pass name="Simple" type="shader" active="true" patchverts="1">
+			<shader type="vs" path="shaders/proj_SimpleVS.hlsl" entry="VShader" />
+			<shader type="ps" path="shaders/proj_SimplePS.hlsl" entry="PShader" />
+			<inputlayout>
+				<item value="Position" semantic="POSITION" />
+				<item value="Normal" semantic="NORMAL" />
+				<item value="Texcoord" semantic="TEXCOORD0" />
+			</inputlayout>
+			<rendertexture />
+			<items>
+				<item name="Box" type="geometry">
+					<type>Cube</type>
+					<width>1</width>
+					<height>1</height>
+					<depth>1</depth>
+					<topology>TriangleList</topology>
+				</item>
+			</items>
+			<itemvalues />
+			<variables>
+				<variable type="float4x4" name="WVP">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float4x4" name="World">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float4" name="difColor">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="int" name="hasTexture">
+					<row>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="int" name="hasNormMap">
+					<row>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float3" name="light.dir">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float" name="light.cone">
+					<row>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float3" name="light.pos">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float" name="light.range">
+					<row>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float3" name="light.att">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float4" name="light.ambient">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+				<variable type="float4" name="light.diffuse">
+					<row>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+						<value>0</value>
+					</row>
+				</variable>
+			</variables>
+			<macros />
+		</pass>
+	</pipeline>
+	<objects>
+		<object type="buffer" name="PerFrameBuffer" size="0" format="float" pausedpreview="false" />
+	</objects>
+	<cameras />
+	<settings>
+		<entry type="pinned" name="WVP" owner="Simple" />
+		<entry type="pinned" name="World" owner="Simple" />
+		<entry type="pinned" name="difColor" owner="Simple" />
+		<entry type="pinned" name="hasTexture" owner="Simple" />
+		<entry type="pinned" name="hasNormMap" owner="Simple" />
+		<entry type="pinned" name="light.dir" owner="Simple" />
+		<entry type="pinned" name="light.cone" owner="Simple" />
+		<entry type="pinned" name="light.pos" owner="Simple" />
+		<entry type="pinned" name="light.range" owner="Simple" />
+		<entry type="pinned" name="light.att" owner="Simple" />
+		<entry type="pinned" name="light.ambient" owner="Simple" />
+		<entry type="pinned" name="light.diffuse" owner="Simple" />
+		<entry type="camera" fp="false">
+			<distance>8</distance>
+			<pitch>31</pitch>
+			<yaw>50</yaw>
+			<roll>360</roll>
+		</entry>
+		<entry type="clearcolor" r="0" g="0" b="0" a="1" />
+		<entry type="usealpha" val="false" />
+	</settings>
+	<plugindata />
+</project>

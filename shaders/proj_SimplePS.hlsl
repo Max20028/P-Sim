@@ -33,9 +33,9 @@ cbuffer cbPerObject
     bool hasNormMap;
 };
 
-Texture2D ObjTexture;
-Texture2D ObjNormMap;
-SamplerState ObjSamplerState;
+// Texture2D ObjTexture;
+// Texture2D ObjNormMap;
+// SamplerState ObjSamplerState;
 
 VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 normal : NORMAL, float3 tangent : TANGENT)
 {
@@ -57,7 +57,6 @@ VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 norm
 
 float4 PShader(VOut input) : SV_TARGET
 {
-    return float4(1.0f, 1.0f, 1.0f, 1.0f);
     input.normal = normalize(input.normal);
     return float4(1.0f, 1.0f, 1.0f, 1.0f);
 

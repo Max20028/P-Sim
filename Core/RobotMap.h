@@ -1,8 +1,9 @@
-#ifndef ROBOTMAP
-#define ROBOTMAP
+
 #include <cstdint>
 #include <bitset>
 
+#ifndef ROBOTMAP
+#define ROBOTMAP
 using Entity = std::uint64_t;
 //uint8 is 0 to 255
 using ComponentType = std::uint8_t;
@@ -14,4 +15,12 @@ const Entity MAX_ENTITIES = 10000;
 const ComponentType MAX_COMPONENTS = 64;
 
 using Signature = std::bitset<MAX_COMPONENTS>;
+
+#define INITIAL_SCREEN_WIDTH  1920
+#define INITIAL_SCREEN_HEIGHT 1080
+
+#define INITIALLY_WINDOWED true
+
+extern int ClientWidth;
+extern int ClientHeight;
 #endif
