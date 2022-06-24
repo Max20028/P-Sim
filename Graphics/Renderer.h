@@ -75,7 +75,7 @@ struct CameraDetails {
 
     void renderObject(Renderable renderable);
 
-    void finishRenderFrame(int fps);
+    void finishRenderFrame(std::wstring debug_string);
 
     void createBuffers(int numIndices, int numVerts, std::vector<DWORD> indices, std::vector<Vertex> vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer);
     void createBuffers(int numIndices, int numVerts, DWORD* indices, Vertex* vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer);
@@ -86,7 +86,7 @@ private:
     bool InitDirectInput(HINSTANCE hInstance, HWND hwnd);
     void CleanD3D(HWND hwnd);
     void InitPipeline();
-    void drawstuff(std::wstring text, int inInt);
+    void drawstuff(std::wstring instr);
     void DetectInput(double time, HWND hwnd);
 //Key Variables
 //TODO: Organize these into a struct or something

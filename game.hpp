@@ -28,7 +28,9 @@ void updateGame(float dt, int fps) {
     //Run update code here
     renderer->startRenderFrame(camdets);
     renderer->renderObject(cubeRender);
-    renderer->finishRenderFrame(fps);
+    std::wostringstream debugString;
+    debugString << L"FPS: " << fps;
+    renderer->finishRenderFrame(debugString.str());
 
     rot += 0.0005f * dt;
     if(rot > 6.28f)
@@ -126,6 +128,7 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
             vertvec.push_back(Vertex(a,b,c));
         } else if(strcmp(token, "f") == 0) {
             token = strtok(NULL, " ");
+                // char* ptok = strtok(token, "//");
             int a = atoi(token);
             token = strtok(NULL, " ");
             int b = atoi(token);

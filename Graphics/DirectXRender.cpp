@@ -5,6 +5,7 @@
 //Function Prototypes
 bool InitDirectInput(HINSTANCE hInstance, HWND hwnd);
 
+
 //Structures
 HRESULT hr;
 
@@ -32,6 +33,8 @@ void Renderer::EndRenderer(HWND hwnd) {
 //TODO: FIGURE THIS SHIT OUT
 
 void Renderer::startRenderFrame(CameraDetails camDets) {
+    
+    devcon->OMSetRenderTargets(1, &backbuffer, depthStencilView);
     devcon->UpdateSubresource( cbPerFrameBuffer, 0, NULL, &constbuffPerFrame, 0, 0 );
     devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer); 
 
@@ -53,15 +56,19 @@ void Renderer::startRenderFrame(CameraDetails camDets) {
     camView = DirectX::XMMatrixLookAtLH( camPosition, camTarget, camUp );
     //The prior VertFOV was 0.4f*3.14f, prior near and far were 1.0f and 1000.0f
     camProjection = DirectX::XMMatrixPerspectiveFovLH( camDets.verticalFOV, (float)ClientWidth/ClientHeight, camDets.nearPlaneDist, camDets.farPlaneDist);
+
 }
 
 void Renderer::renderObject(Renderable renderable) {
+    UINT stride = renderable.stride;
+    UINT offset = renderable.offset;
     //Set the grounds index buffer
     devcon->IASetIndexBuffer( renderable.IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
     //Set the grounds vertex buffer
-    devcon->IASetVertexBuffers( 0, 1, &renderable.VertBuffer, &renderable.stride, &renderable.offset );
+    devcon->IASetVertexBuffers( 0, 1, &renderable.VertBuffer, &stride, &offset );
     //Set the WVP matrix and send it to the constant buffer in effect file
-    DirectX::XMMATRIX WVP = renderable.World * camView * camProjection;
+    DirectX::XMMATRIX WVP = DirectX::XMMatrixIdentity();
+    WVP = renderable.World * camView * camProjection;
     cbPerObj.WVP = XMMatrixTranspose(WVP);    
     cbPerObj.World = XMMatrixTranspose(renderable.World);    
     cbPerObj.difColor = renderable.difColor;
@@ -74,79 +81,59 @@ void Renderer::renderObject(Renderable renderable) {
     //     devcon->PSSetShaderResources( 0, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].texArrayIndex] );
     // if(bottlematerial[bottleSubsetTexture[i]].hasNormMap)
     //     devcon->PSSetShaderResources( 1, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].normMapTexArrayIndex] );
-    devcon->PSSetSamplers( 0, 1, &TexSamplerState );
+    // devcon->PSSetSamplers( 0, 1, &TexSamplerState );
     devcon->RSSetState(NoCullMode);
     int indexStart = 0;
     int indexDrawAmount =  renderable.indexLength;
-    // if(!bottlematerial[bottleSubsetTexture[i]].transparent)
-    devcon->DrawIndexed( indexDrawAmount, indexStart, 0 );
-
-    // DWORD indi[36];
-    // memcpy(indi, renderable.IndexBuffer, sizeof(DWORD) * 36);
-    // for(int i = 0; i < 36; i++)
-    //     std::cout << indi[i] << " ";
-    // std::cout << std::endl;
-
+    devcon->DrawIndexed( indexDrawAmount, 0, 0 );
 }
 
-void Renderer::finishRenderFrame(int fps) {
+void Renderer::finishRenderFrame(std::wstring instr) {
     //Draw all the 2d stuff on top
-    drawstuff(L"FPS: ", fps);
+    drawstuff(instr);
     // switch the back buffer and the front buffer
     swapchain->Present(0, 0);
 }
 
-void Renderer::createBuffers(int numIndices, int numVerts, std::vector<DWORD> indices, std::vector<Vertex> vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer) {
-    //Init Index Buffer
-    D3D11_BUFFER_DESC indexBufferDesc;
-    ZeroMemory( &indexBufferDesc, sizeof(indexBufferDesc) );
+// void Renderer::createBuffers(int numIndices, int numVerts, std::vector<DWORD> indices, std::vector<Vertex> vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer) {
+//     //Init Index Buffer
+//     D3D11_BUFFER_DESC indexBufferDesc;
+//     ZeroMemory( &indexBufferDesc, sizeof(indexBufferDesc) );
 
-    indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    indexBufferDesc.ByteWidth = sizeof(DWORD) * numIndices;
-    indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-    indexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    indexBufferDesc.MiscFlags = 0;
+//     indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+//     indexBufferDesc.ByteWidth = sizeof(DWORD) * numIndices;
+//     indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+//     indexBufferDesc.CPUAccessFlags = 0;
+//     indexBufferDesc.MiscFlags = 0;
 
-    D3D11_SUBRESOURCE_DATA iinitData;
+//     D3D11_SUBRESOURCE_DATA iinitData;
 
-    ZeroMemory( &iinitData, sizeof(iinitData) );
-    iinitData.pSysMem = &indices[0];
+//     ZeroMemory( &iinitData, sizeof(iinitData) );
+//     iinitData.pSysMem = &indices[0];
 
-    hr = dev->CreateBuffer(&indexBufferDesc, NULL, indexBuffer);
-    if(!SUCCEEDED(hr))
-        std::cout << "Index Failed\n";
+//     hr = dev->CreateBuffer(&indexBufferDesc, NULL, indexBuffer);
+//     if(!SUCCEEDED(hr))
+//         std::cout << "Index Failed\n";
 
-    //Init Vert Buffer
-    D3D11_BUFFER_DESC vertexBufferDesc;
-    ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
+//     //Init Vert Buffer
+//     D3D11_BUFFER_DESC vertexBufferDesc;
+//     ZeroMemory( &vertexBufferDesc, sizeof(vertexBufferDesc) );
 
-    vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    vertexBufferDesc.ByteWidth = sizeof( Vertex ) * numVerts;
-    vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    vertexBufferDesc.CPUAccessFlags = 0;
-    vertexBufferDesc.MiscFlags = 0;
+//     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+//     vertexBufferDesc.ByteWidth = sizeof( Vertex ) * numVerts;
+//     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+//     vertexBufferDesc.CPUAccessFlags = 0;
+//     vertexBufferDesc.MiscFlags = 0;
 
-    D3D11_SUBRESOURCE_DATA vertexBufferData; 
+//     D3D11_SUBRESOURCE_DATA vertexBufferData; 
 
-    ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
-    vertexBufferData.pSysMem = &vertices[0];
+//     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
+//     vertexBufferData.pSysMem = &vertices[0];
 
-    hr = dev->CreateBuffer( &vertexBufferDesc, NULL, vertBuffer);
-    if(!SUCCEEDED(hr))
-        std::cout << "Vertex Failed\n";
-
-    // //Create constant buffer
-    // D3D11_BUFFER_DESC cbbd;    
-    // ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
-
-    // cbbd.Usage = D3D11_USAGE_DEFAULT;
-    // cbbd.ByteWidth = sizeof(cbPerObject);
-    // cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    // cbbd.CPUAccessFlags = 0;
-    // cbbd.MiscFlags = 0;
-
-    // dev->CreateBuffer(&cbbd, NULL, &cbPerObjectBuffer);
-}
+//     hr = dev->CreateBuffer( &vertexBufferDesc, NULL, vertBuffer);
+//     if(!SUCCEEDED(hr))
+//         std::cout << "Vertex Failed\n";
+// }
 
 void Renderer::createBuffers(int numIndices, int numVerts, DWORD* indices, Vertex* vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer) {
     //Init Index Buffer
@@ -164,9 +151,9 @@ void Renderer::createBuffers(int numIndices, int numVerts, DWORD* indices, Verte
     ZeroMemory( &iinitData, sizeof(iinitData) );
     iinitData.pSysMem = indices;
 
-    hr = dev->CreateBuffer(&indexBufferDesc, NULL, indexBuffer);
+    hr = dev->CreateBuffer(&indexBufferDesc, &iinitData, indexBuffer);
     if(!SUCCEEDED(hr))
-        std::cout << "Index Failed\n";
+        std::cout << "Index Failed A\n";
 
     //Init Vert Buffer
     D3D11_BUFFER_DESC vertexBufferDesc;
@@ -183,9 +170,9 @@ void Renderer::createBuffers(int numIndices, int numVerts, DWORD* indices, Verte
     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
     vertexBufferData.pSysMem = vertices;
 
-    hr = dev->CreateBuffer( &vertexBufferDesc, NULL, vertBuffer);
+    hr = dev->CreateBuffer( &vertexBufferDesc, &vertexBufferData, vertBuffer);
     if(!SUCCEEDED(hr))
-        std::cout << "Vertex Failed\n";
+        std::cout << "Vertex Failed A\n";
 
     // //Create constant buffer
     // D3D11_BUFFER_DESC cbbd;    
@@ -540,13 +527,7 @@ void Renderer::InitPipeline()
     dev->CreateSamplerState( &sampDesc, &TexSamplerState);
 }
 
-void Renderer::drawstuff(std::wstring text, int inInt) {
-        static const WCHAR sc_helloWorld[] = L"Hello, World!";
-
-
-        std::wostringstream printString;
-        printString << text << inInt << "\n";
-        std::wstring printText = printString.str();
+void Renderer::drawstuff(std::wstring instr) {
 
         // Retrieve the size of the render target.
         D2D1_SIZE_F renderTargetSize = d2drendertarget->GetSize();
@@ -558,8 +539,8 @@ void Renderer::drawstuff(std::wstring text, int inInt) {
         // d2drendertarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
         d2drendertarget->DrawText(
-            printText.c_str(),
-            wcslen(printText.c_str()),
+            instr.c_str(),
+            wcslen(instr.c_str()),
             dwritetextformat,
             D2D1::RectF(0, 0, renderTargetSize.width, renderTargetSize.height),
             blackbrush

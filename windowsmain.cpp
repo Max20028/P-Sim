@@ -75,6 +75,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     startGame(hwnd, hInstance);
 
+    GetFrameTime();
+
     // Run the message loop.
 
     printf("Initialization Complete. Starting Message Loop\n");

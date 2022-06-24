@@ -33,9 +33,9 @@ cbuffer cbPerObject
     bool hasNormMap;
 };
 
-Texture2D ObjTexture;
-Texture2D ObjNormMap;
-SamplerState ObjSamplerState;
+// Texture2D ObjTexture;
+// Texture2D ObjNormMap;
+// SamplerState ObjSamplerState;
 
 VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 normal : NORMAL, float3 tangent : TANGENT)
 {
@@ -44,6 +44,7 @@ VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 norm
     output.position = mul(position, WVP);
 
     output.worldPos = mul(position, World);
+    return output;
     
     output.normal = mul(normal, World);
 
