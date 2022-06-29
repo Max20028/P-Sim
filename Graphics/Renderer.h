@@ -1,3 +1,4 @@
+#pragma once
 //Basic Windows Headers
 #include <windows.h>
 #include <windowsx.h>
@@ -16,6 +17,7 @@
 
 //Engine Config
 #include "../Core/Robotmap.h"
+#include "../resc/Components/CoreComponents.h"
 
 struct Renderable {
     ID3D11Buffer* IndexBuffer;
@@ -63,8 +65,9 @@ struct CameraDetails {
     float verticalFOV;
     float nearPlaneDist;
     float farPlaneDist;
-    float camTarget[3];
-    float camUp[3];
+    // float camTarget[3];
+    // float camUp[3];
+    float rotation[3];
 };
     //This is the function that starts all the 3d stuff
     void InitRenderer(HWND, HINSTANCE);
@@ -77,6 +80,8 @@ struct CameraDetails {
 
     void finishRenderFrame(std::wstring debug_string);
 
+    void DetectInput(double time, HWND hwnd);
+
     void createBuffers(int numIndices, int numVerts, std::vector<DWORD> indices, std::vector<Vertex> vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer);
     void createBuffers(int numIndices, int numVerts, DWORD* indices, Vertex* vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer);
 
@@ -87,7 +92,6 @@ private:
     void CleanD3D(HWND hwnd);
     void InitPipeline();
     void drawstuff(std::wstring instr);
-    void DetectInput(double time, HWND hwnd);
 //Key Variables
 //TODO: Organize these into a struct or something
 //These are the windows handles to the window and process. Important for binding d3d to the window

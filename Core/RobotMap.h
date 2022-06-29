@@ -1,4 +1,4 @@
-
+#pragma once
 #include <cstdint>
 #include <bitset>
 
@@ -20,6 +20,8 @@ using Signature = std::bitset<MAX_COMPONENTS>;
 #define INITIAL_SCREEN_HEIGHT 1080
 
 #define INITIALLY_WINDOWED true
+
+#define FPS_CAP 60
 
 extern int ClientWidth;
 extern int ClientHeight;

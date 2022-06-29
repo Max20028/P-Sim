@@ -1,3 +1,4 @@
+#pragma once
 #include "RobotMap.h"
 #include <array>
 #include <unordered_map>
@@ -17,7 +18,7 @@ public:
 };
 
 template <typename T>
-class ComponentArray : IComponentArray {
+class ComponentArray : public IComponentArray {
     public: 
         void InsertData(Entity ent, T component) {
             assert(mapEntityToIndex.find(ent) == mapIndextoEntity.end() && "Component added to same entity more than once.");
@@ -25,17 +26,17 @@ class ComponentArray : IComponentArray {
             //Insert the component data at the end and update the maps
             EntitySize_t newIndex = size;
             mapEntityToIndex[ent] = newIndex;
-            mapIndextoEntity[newIndex] = entity;
+            mapIndextoEntity[newIndex] = ent;
             componentArray[newIndex] = component;
 
             size++;
         }
 
         void RemoveData(Entity ent) {
-            assert(mapEntityToIndex.find(entity) != mapEntityToIndex.end() && "Removing component that does not exist");
+            assert(mapEntityToIndex.find(ent) != mapEntityToIndex.end() && "Removing component that does not exist");
 
             //Copy last element into deleted element's place. Maintains Density
-            EntitySize_t removedEntIndex = mapEntityToIndex[entity];
+            EntitySize_t removedEntIndex = mapEntityToIndex[ent];
             EntitySize_t lastElementIndex = size-1;
             componentArray[removedEntIndex] = componentArray[lastElementIndex];
 
@@ -44,21 +45,21 @@ class ComponentArray : IComponentArray {
             mapEntityToIndex[lastElementIndex] = removedEntIndex;
             mapIndextoEntity[removedEntIndex] = lastEntity;
 
-            mapEntityToIndex.erase(entity);
+            mapEntityToIndex.erase(ent);
             mapIndextoEntity.erase(lastElementIndex);
 
             size--;
         }
 
         T& GetData(Entity ent) {
-            assert(mapEntityToIndex.find(entity) != mapEntityToIndex.end() && "Retrieving component that does not exist");
+            assert(mapEntityToIndex.find(ent) != mapEntityToIndex.end() && "Retrieving component that does not exist");
 
-            return componentArray[mapEntityToIndex[entity]];
+            return componentArray[mapEntityToIndex[ent]];
         }
 
         void EntityDestroyed(Entity ent) override{
-            if(mapEntityToIndex.find(entity) != mapEntityToIndex.end()) 
-                RemoveData(entity);
+            if(mapEntityToIndex.find(ent) != mapEntityToIndex.end()) 
+                RemoveData(ent);
         }
 
     private: 
@@ -82,7 +83,7 @@ class ComponentManager {
         void RegisterComponent() {
             const char* typeName = typeid(T).name();
 
-            assert(componentTypes.find(typename) == componentTypes.end() && "Registering component type more than once");
+            assert(componentTypes.find(typeName) == componentTypes.end() && "Registering component type more than once");
 
             //Add component type to map
             componentTypes.insert({typeName, nextComponentType});
@@ -140,7 +141,7 @@ class ComponentManager {
         std::shared_ptr<ComponentArray<T>> GetComponentArray() {
             const char* typeName = typeid(T).name();
 
-            assert (mComponentTypes.find(typeName) != mComponentTypes.end() && "Component not registered before use");
+            assert (componentTypes.find(typeName) != componentTypes.end() && "Component not registered before use");
 
             return std::static_pointer_cast<ComponentArray<T>>(componentArrays[typeName]);
         }

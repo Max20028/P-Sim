@@ -1,3 +1,4 @@
+#pragma once
 #include "RobotMap.h"
 #include <queue>
 #include <array>

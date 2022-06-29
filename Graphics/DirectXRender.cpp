@@ -50,11 +50,16 @@ void Renderer::startRenderFrame(CameraDetails camDets) {
     //Setup camera
     DirectX::XMVECTOR camPosition = DirectX::XMVectorSet(camDets.position[0], camDets.position[1], camDets.position[2], 0.0f);
     
-    DirectX::XMVECTOR camTarget = DirectX::XMVectorSet( camDets.camTarget[0], camDets.camTarget[1], camDets.camTarget[2], 0.0f );
-    DirectX::XMVECTOR camUp = DirectX::XMVectorSet( camDets.camUp[0], camDets.camUp[1], camDets.camUp[2], 0.0f );
+    DirectX::XMMATRIX rotationMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixRotationRollPitchYaw(camDets.rotation[0], camDets.rotation[1], camDets.rotation[2]));
+
+    DirectX::XMVECTOR camTarget = DirectX::XMVector3TransformCoord(DirectX::XMVectorSet( 0.0f, 0.0f, 1.0f, 0.0f ), rotationMatrix);
+    camTarget = DirectX::XMVectorAdd(camPosition, camTarget);
+    camTarget = DirectX::XMVectorSetW(camTarget, 0.0f);
+    DirectX::XMVECTOR camUp = DirectX::XMVector3TransformCoord(DirectX::XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f ), rotationMatrix);
+    camUp = DirectX::XMVectorSetW(camUp, 0.0f);
 
     camView = DirectX::XMMatrixLookAtLH( camPosition, camTarget, camUp );
-    //The prior VertFOV was 0.4f*3.14f, prior near and far were 1.0f and 1000.0f
+    
     camProjection = DirectX::XMMatrixPerspectiveFovLH( camDets.verticalFOV, (float)ClientWidth/ClientHeight, camDets.nearPlaneDist, camDets.farPlaneDist);
 
 }
