@@ -14,16 +14,15 @@ void Renderer::InitRenderer(HWND hwnd, HINSTANCE hInstance) {
     // hwnd = hwn;
     // hInstance = hInstanc;
     InitD3D(hwnd, hInstance);
+}
 
-    Light light;
-
-    light.pos = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
-    light.range = 100.0f;
-    light.att = DirectX::XMFLOAT3(0.0f, 0.2f, 0.0f);
-    light.ambient = DirectX::XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-    light.diffuse = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-
-    constbuffPerFrame.light = light;
+void Renderer::updateLights(RenderLight light[MAX_LIGHTS], int numLights) {
+    constbuffPerFrame.numberLights = numLights;
+    for(int i = 0; i < numLights; i++) {
+        constbuffPerFrame.light[i] = light[i];
+    }
+    devcon->UpdateSubresource( cbPerFrameBuffer, 0, NULL, &constbuffPerFrame, 0, 0 );
+    devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer); 
 }
 
 void Renderer::EndRenderer(HWND hwnd) {
@@ -80,7 +79,7 @@ void Renderer::renderObject(Renderable renderable) {
     cbPerObj.hasTexture = false;
     cbPerObj.hasNormMap = false;
     devcon->UpdateSubresource( cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0 );
-    devcon->VSSetConstantBuffers( 0, 1, &cbPerObjectBuffer );
+    devcon->VSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
     devcon->PSSetConstantBuffers( 1, 1, &cbPerObjectBuffer );
     // if(bottlematerial[bottleSubsetTexture[i]].hasTexture)
     //     devcon->PSSetShaderResources( 0, 1, &meshSRV[bottlematerial[bottleSubsetTexture[i]].texArrayIndex] );
@@ -397,8 +396,12 @@ void Renderer::InitPipeline()
     ID3DBlob *VS, *PS;
     // D3DX11CompileFromFile(L"shaders.shader", 0, 0, "VShader", "vs_4_0", 0, 0, 0, &VS, 0, 0);
     // D3DX11CompileFromFile(L"shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, 0, &PS, 0, 0);
-    D3DCompileFromFile(L"myshader.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VShader", "vs_4_0", 0, 0,&VS, 0);
-    D3DCompileFromFile(L"myshader.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PShader", "ps_4_0", 0, 0,&PS, 0);
+    hr = D3DCompileFromFile(L"myshader.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VShader", "vs_4_0", 0, 0,&VS, 0);
+    if(!SUCCEEDED(hr))
+        printf("Failed to load VShader\n");
+    hr = D3DCompileFromFile(L"myshader.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PShader", "ps_4_0", 0, 0,&PS, 0);
+        if(!SUCCEEDED(hr))
+        printf("Failed to load PShader\n");
     printf("L");
 
     // encapsulate both shaders into shader objects
@@ -516,7 +519,9 @@ void Renderer::InitPipeline()
     cbbd.CPUAccessFlags = 0;
     cbbd.MiscFlags = 0;
 
-    dev->CreateBuffer(&cbbd, NULL, &cbPerFrameBuffer);
+    hr = dev->CreateBuffer(&cbbd, NULL, &cbPerFrameBuffer);
+    if(!SUCCEEDED(hr))
+        printf("AAHAHAHAHA, %x\n", hr);
 
     //Create Sampler State
     D3D11_SAMPLER_DESC sampDesc;
@@ -561,7 +566,7 @@ void Renderer::DetectInput(double time, HWND hwnd)
     BYTE keyboardState[256];
 
     DIKeyboard->Acquire();
-    DIMouse->Acquire();
+    // DIMouse->Acquire();
 
     DIMouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseCurrState);
 

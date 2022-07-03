@@ -10,6 +10,7 @@
 #include "resc/Components/MovementComponents.h"
 #include "resc/Systems/PhysicsSystem.hpp"
 #include "resc/Systems/CameraSystem.hpp"
+#include "resc/Systems/LightSystem.hpp"
 #include "resc/Systems/SimpleMeshSystem.hpp"
 #include "resc/Systems/SpinSystem.hpp"
 #include "resc/prefabs.hpp"
@@ -21,6 +22,7 @@ Renderer* renderer;
 Scene scene;
 std::shared_ptr<PhysicsSystem> physicsSystem;
 std::shared_ptr<CameraSystem> cameraSystem;
+std::shared_ptr<LightSystem> lightSystem;
 std::shared_ptr<SimpleMeshSystem> simpleMeshSystem;
 std::shared_ptr<SpinSystem> spinSystem;
 std::vector<Entity> entities;
@@ -59,7 +61,31 @@ void updateGame(float dt, int tps) {
 
     //Render stuff
     renderer->startRenderFrame(camdets);
-    float rot;
+
+    //Update the lights
+    int numLights = lightSystem->entities.size();
+    if(numLights > MAX_LIGHTS) {
+        numLights = MAX_LIGHTS;
+    }
+    int i = 0;
+    Renderer::RenderLight renderLights[16];
+    for(auto entity : lightSystem->entities) {
+        if(i >= MAX_LIGHTS) break;
+        Light light = scene.GetComponent<Light>(entity);
+        Transform transform = scene.GetComponent<Transform>(entity);
+        renderLights[i].ambient = DirectX::XMFLOAT4(light.ambient);
+        renderLights[i].att = DirectX::XMFLOAT3(light.attenuation);
+        renderLights[i].cone = light.cone;
+        renderLights[i].diffuse = DirectX::XMFLOAT4(light.diffuse);
+        //Check the startrenderframe rotations to see how this magic works
+        DirectX::XMVECTOR dir = DirectX::XMVector3TransformCoord(DirectX::XMVectorSet( 0.0f, 0.0f, 1.0f, 0.0f ), DirectX::XMMatrixTranspose(DirectX::XMMatrixRotationRollPitchYaw(transform.rotation[0], transform.rotation[1], transform.rotation[2])));
+        DirectX::XMStoreFloat3(&renderLights[i].dir, dir);
+        renderLights[i].pos = DirectX::XMFLOAT3(transform.translation);
+        renderLights[i].range = light.range;
+        renderLights[i].type = light.type;
+    }
+    renderer->updateLights(renderLights, numLights);
+
     //Render the simple meshes
     for(auto entity : simpleMeshSystem->entities) {
         SimpleMesh mesh = scene.GetComponent<SimpleMesh>(entity);
@@ -68,7 +94,6 @@ void updateGame(float dt, int tps) {
         render.difColor = DirectX::XMFLOAT4(mesh.difcolor);
         render.IndexBuffer = mesh.indexBuffer;
         render.indexLength = mesh.indexLength;
-        rot = transform.rotation[1];
         render.offset = mesh.offset;
         render.stride = mesh.stride;
         render.VertBuffer = mesh.vertBuffer;
@@ -79,7 +104,7 @@ void updateGame(float dt, int tps) {
         renderer->renderObject(render);
     }
     std::wostringstream debugString;
-    debugString << L"TPS: " << tps << L"SPIN: " << rot;
+    debugString << L"TPS: " << tps << L"\n";
     renderer->finishRenderFrame(debugString.str());
 }
 
@@ -93,6 +118,7 @@ void startGame(HWND hwn, HINSTANCE hInstance) {
     //Init Components
     scene.RegisterComponent<Camera>();
     scene.RegisterComponent<Transform>();
+    scene.RegisterComponent<Light>();
     scene.RegisterComponent<CubeMesh>();
     scene.RegisterComponent<Rigidbody>();
     scene.RegisterComponent<SimpleMesh>();
@@ -111,6 +137,12 @@ void startGame(HWND hwn, HINSTANCE hInstance) {
         camerasignature.set(scene.GetComponentType<Camera>());
         camerasignature.set(scene.GetComponentType<Transform>());
         scene.SetSystemSignature<CameraSystem>(camerasignature);
+    //Light System
+        lightSystem = scene.RegisterSystem<LightSystem>();
+        Signature lightsignature;
+        lightsignature.set(scene.GetComponentType<Transform>());
+        lightsignature.set(scene.GetComponentType<Light>());
+        scene.SetSystemSignature<LightSystem>(lightsignature);
     //SimpleMesh System
         simpleMeshSystem = scene.RegisterSystem<SimpleMeshSystem>();
         Signature simplemeshsignature;
@@ -131,54 +163,9 @@ void startGame(HWND hwn, HINSTANCE hInstance) {
     entities.push_back(createCameraPrefab());
     cameraSystem->mainCamera = entities.back();
 
-    // SimpleModel monkey;
-
-    // DWORD* indices;
-    // Vertex* verts;
-
-    // int numberInd;
-    // int numberVert;
-
-    // ImportObj("resc/misc/monkey.obj", &verts, &indices, &numberVert, &numberInd);
-
-    // renderer->createBuffers(numberInd, numberVert, indices, verts, &monkey.indexBuffer, &monkey.vertBuffer);
-
-
-    // camdets.backColor[0] = 0.2f;
-    // camdets.backColor[1] = 0.2f;
-    // camdets.backColor[2] = 0.2f;
-    // camdets.backColor[3] = 1.0f;
-
-    // camdets.camTarget[0] = 0.0f;
-    // camdets.camTarget[1] = 0.0f;
-    // camdets.camTarget[2] = 0.0f;
-
-    // camdets.camUp[0] = 0.0f;
-    // camdets.camUp[1] = 1.0f;
-    // camdets.camUp[2] = 0.0f;
-
-    // camdets.farPlaneDist = 1000;
-    // camdets.nearPlaneDist = 1;
-
-    // camdets.position[0] = 0;
-    // camdets.position[1] = 3;
-    // camdets.position[2] = -8;
-
-    // camdets.verticalFOV = 0.4*3.14;
-
-
-    // cubeRender.difColor = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
-
-    // cubeRender.IndexBuffer = monkey.indexBuffer;
-    // cubeRender.VertBuffer = monkey.vertBuffer;
-
-    // cubeRender.offset = 0;
-    // cubeRender.stride = sizeof(Vertex);
-
-    // cubeRender.indexLength = numberInd;
-    // DirectX::XMVECTOR rotaxis = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    // DirectX::XMMATRIX Rotation = DirectX::XMMatrixRotationAxis(rotaxis, rot);
-    // cubeRender.World = DirectX::XMMatrixTranslation( 0.0f, 0.0f, 4.0f) * Rotation;
+    //Create Light
+    float attenuation[3] = {0.0f, 0.2f, 0.0f};
+    entities.push_back(createPointLight(5, 0, -2, 0.3, 1.0f, 100, attenuation));
 }
 
 void endGame(HWND hwnd) {

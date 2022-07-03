@@ -14,16 +14,18 @@ struct Light
     float3 pos;
     float  range;
     float3 att;
+    int type;
     float4 ambient;
     float4 diffuse;
 };
 
-cbuffer cbPerFrame
+cbuffer cbPerFrame : register(b0)
 {
-    Light light;
+    int numberLights;
+    Light lights[16];
 };
 
-cbuffer cbPerObject
+cbuffer cbPerObject : register(b1)
 {
     float4x4 WVP;
     float4x4 World;
@@ -33,9 +35,13 @@ cbuffer cbPerObject
     bool hasNormMap;
 };
 
-// Texture2D ObjTexture;
-// Texture2D ObjNormMap;
-// SamplerState ObjSamplerState;
+float3 DirLight(Light inlight, float3 normal, float4 diffuse);
+float3 PointLight(Light inlight, float3 normal, float4 diffuse, float4 worldPos);
+float3 SpotLight(Light inlight, float3 normal, float4 diffuse, float4 worldPos);
+
+Texture2D ObjTexture;
+Texture2D ObjNormMap;
+SamplerState ObjSamplerState;
 
 VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 normal : NORMAL, float3 tangent : TANGENT)
 {
@@ -44,7 +50,7 @@ VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 norm
     output.position = mul(position, WVP);
 
     output.worldPos = mul(position, World);
-    return output;
+    // return output;
     
     output.normal = mul(normal, World);
 
@@ -58,21 +64,20 @@ VOut VShader(float4 position : POSITION, float2 texcoord : TEXCOORD, float3 norm
 
 float4 PShader(VOut input) : SV_TARGET
 {
-    return float4(1.0f, 1.0f, 1.0f, 1.0f);
     input.normal = normalize(input.normal);
-    return float4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    // //Set diffuse color of material
-    // float4 diffuse = difColor;
-    // // diffuse = float4(0.5f, 0.5f, 0.5f, 1.0f);
+    //Set diffuse color of material
+    float4 diffuse = difColor;
+    // return diffuse;
 
+    //WHY DID COMMENTING THIS OUT FIX IT??? I CANT FIGURE OUT WHY THIS WAS HERE INITIALLY
     // if(input.normal.g < 0.0f)
     //     return float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    // //If material has a diffuse texture map, set it now
+    //If material has a diffuse texture map, set it now
     // if(hasTexture == true)
     //     diffuse = ObjTexture.Sample( ObjSamplerState, input.texcoord );
-    // // diffuse.g = abs((diffuse.g * input.worldPos.x * 0.05))%1;
+    // diffuse.g = abs((diffuse.g * input.worldPos.x * 0.05))%1;
 
 
     // //If material has a normal map, we can set it now
@@ -96,54 +101,109 @@ float4 PShader(VOut input) : SV_TARGET
     //     input.normal = normalize(mul(normalMap, texSpace));
     // }
 
-    // float3 finalColor = float3(0.0f, 0.0f, 0.0f);
+    float3 finalColor = float3(0.0f, 0.0f, 0.0f);
+    
+    // return float4(abs(input.normal), 1.0f);
+    // return lights[0].ambient;
+    return float4(PointLight(lights[0], input.normal, diffuse, input.worldPos), 1.0f);
 
-    // if(any(light.att)) {
-    //     //Point Light Version
-    //     //Create the vector between the light position and the pixels position
-    //     float3 lightToPixelVec = light.pos - input.worldPos;
+    for(int i = 0; i < numberLights; i++) {
+        int type = lights[i].type;
+        if(type == 0)
+            finalColor += DirLight(lights[i], input.normal, diffuse);
+        else if(type == 1)
+            finalColor += PointLight(lights[i], input.normal, diffuse, input.worldPos);
+        else if(type == 2)
+            finalColor += SpotLight(lights[i], input.normal, diffuse, input.worldPos);
+    }
+
+    
+    //REturn the final color
+    return saturate(float4(finalColor, diffuse.a));
+
+}
+
+
+float3 DirLight(Light inlight, float3 normal, float4 diffuse) {
+    float3 color = float3(0.0f, 0.0f, 0.0f);
+    color = diffuse * inlight.ambient;
+    color += saturate(dot(inlight.dir, normal) * inlight.diffuse * diffuse);
+    return color;
+}
+float3 PointLight(Light inlight, float3 normal, float4 diffuse, float4 worldPos) {
+        //Point Light Version
+        float3 color = float3(0.0f, 0.0f, 0.0f);
+        //Create the vector between the light position and the pixels position
+        float3 lightToPixelVec = inlight.pos - worldPos;
+        
+        //Find the distance between the light pos and pixel pos
+        float d = length(lightToPixelVec);
+
+        //Create the ambient light
+        float3 finalAmbient = diffuse * inlight.ambient;
+
+        //If the pixel is too far from the light, just return just ambient
+        if(d>inlight.range)
+            return float4(finalAmbient, diffuse.a);
+
+        //Turn lightToPixelVec into a unit length vector describing the pixels direction from light to pixel
+        lightToPixelVec /= d;
+
+        //Calculate how much light the pixel gets by the angle in which the light strikes the pixels surface
+        float howMuchLight = dot(lightToPixelVec, normal);
+        
+        //If light is triking the front side of the pixel
+        if(howMuchLight > 0.0f) {
+            //Add light to the final color of the pixel
+            color += howMuchLight * diffuse * inlight.diffuse;
+
+            //Calculate Light's Falloff factor
+            color /= inlight.att[0] + (inlight.att[1]*d) + (inlight.att[2]*d*d);
+        }
+
+        //Make sure the values are between 1 and 0, and add the ambient
+        color = saturate(color + finalAmbient);
+        return color;
+}
+
+float3 SpotLight(Light inlight, float3 normal, float4 diffuse, float4 worldPos) {
+        //SpotLight Version
+        float3 color = float3(0.0f, 0.0f, 0.0f);
+        //Create the vector between the light position and the pixels position
+        float3 lightToPixelVec = inlight.pos - worldPos;
         
 
-    //     //Find the distance between the light pos and pixel pos
-    //     float d = length(lightToPixelVec);
+        //Find the distance between the light pos and pixel pos
+        float d = length(lightToPixelVec);
 
-    //     //Create the ambient light
-    //     float3 finalAmbient = diffuse * light.ambient;
+        //Create the ambient light
+        float3 finalAmbient = diffuse * inlight.ambient;
 
-    //     //If the pixel is too far from the light, just return just ambient
-    //     if(d>light.range)
-    //         return float4(finalAmbient, diffuse.a);
+        //If the pixel is too far from the light, just return just ambient
+        if(d>inlight.range)
+            return float4(finalAmbient, diffuse.a);
 
-    //     //Turn lightToPixelVec into a unit length vector describing the pixels direction from light to pixel
-    //     lightToPixelVec /= d;
+        //Turn lightToPixelVec into a unit length vector describing the pixels direction from light to pixel
+        lightToPixelVec /= d;
 
-    //     //Calculate how much light the pixel gets by the angle in which the light strikes the pixels surface
-    //     float howMuchLight = dot(lightToPixelVec, input.normal);
+        //Calculate how much light the pixel gets by the angle in which the light strikes the pixels surface
+        float howMuchLight = dot(lightToPixelVec, normal);
         
-    //     //If light is triking the front side of the pixel
-    //     if(howMuchLight > 0.0f) {
-    //         //Add light to the final color of the pixel
-    //         finalColor += howMuchLight * diffuse * light.diffuse;
+        //If light is triking the front side of the pixel
+        if(howMuchLight > 0.0f) {
+            //Add light to the final color of the pixel
+            color += howMuchLight * diffuse * inlight.diffuse;
 
-    //         //Calculate Light's Falloff factor
-    //         finalColor /= light.att[0] + (light.att[1]*d) + (light.att[2]*d*d);
+            //Calculate Light's Falloff factor
+            color /= inlight.att[0] + (inlight.att[1]*d) + (inlight.att[2]*d*d);
             
-    //         //If this is a spotlight... only have light in direction
-    //         if(light.cone > 0.0f) {
-    //             //Calculate falloff from center to edge of pointlight cone
-    //             finalColor *= pow(max(dot(-lightToPixelVec, light.dir), 0.0f), light.cone);
-    //         }
-    //     }
+            if(inlight.cone > 0.0f) {
+                //Calculate falloff from center to edge of pointlight cone
+                color *= pow(max(dot(-lightToPixelVec, inlight.dir), 0.0f), inlight.cone);
+            }
+        }
 
-    //     //Make sure the values are between 1 and 0, and add the ambient
-    //     finalColor = saturate(finalColor + finalAmbient);
-    // } else {
-    //     //Directional Light Version
-    //     finalColor = diffuse * light.ambient;
-    //     finalColor += saturate(dot(light.dir, input.normal) * light.diffuse * diffuse);
-    // }
-    // //REturn the final color
-    // // return float4(input.normal, diffuse.a);
-    // return float4(finalColor, diffuse.a);
-
+        //Make sure the values are between 1 and 0, and add the ambient
+        color = saturate(color + finalAmbient);
+        return color;
 }

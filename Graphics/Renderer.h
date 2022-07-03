@@ -69,8 +69,26 @@ struct CameraDetails {
     // float camUp[3];
     float rotation[3];
 };
+//Lights stuff
+struct RenderLight
+{
+    RenderLight()
+    {
+        ZeroMemory(this, sizeof(RenderLight));
+    }
+    DirectX::XMFLOAT3 dir;
+    float cone;
+    DirectX::XMFLOAT3 pos;
+    float range;
+    DirectX::XMFLOAT3 att;
+    int type;
+    DirectX::XMFLOAT4 ambient;
+    DirectX::XMFLOAT4 diffuse;
+};
     //This is the function that starts all the 3d stuff
     void InitRenderer(HWND, HINSTANCE);
+
+    void updateLights(RenderLight light[MAX_LIGHTS], int numLights);
 
     void EndRenderer(HWND hwnd);
 
@@ -99,22 +117,7 @@ private:
 // HWND hwnd;
 // HINSTANCE hInstance;
 
-//Lights stuff
-struct Light
-{
-    Light()
-    {
-        ZeroMemory(this, sizeof(Light));
-    }
-    DirectX::XMFLOAT3 dir;
-    float cone;
-    DirectX::XMFLOAT3 pos;
-    float range;
-    DirectX::XMFLOAT3 att;
-    float pad;
-    DirectX::XMFLOAT4 ambient;
-    DirectX::XMFLOAT4 diffuse;
-};
+
 
 struct cbPerObject
 {
@@ -129,7 +132,9 @@ struct cbPerObject
 };
 struct cbPerFrame
 {
-    Light  light;
+    int numberLights;
+    DirectX::XMINT3 pad;
+    RenderLight light[MAX_LIGHTS];
 };
 
 

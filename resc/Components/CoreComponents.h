@@ -40,3 +40,13 @@ struct SimpleMesh {
     int offset;
     int indexLength;
 };
+struct Light {
+    //0: Directional    1: Point    2: Spotlight
+    int type;
+    float cone;
+    float range;
+    float attenuation[3];
+
+    float ambient[4];
+    float diffuse[4];
+};

@@ -20,6 +20,7 @@ using Signature = std::bitset<MAX_COMPONENTS>;
 #define INITIAL_SCREEN_HEIGHT 1080
 
 #define INITIALLY_WINDOWED true
+#define MAX_LIGHTS 16
 
 #define FPS_CAP 60
 
