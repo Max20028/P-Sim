@@ -1,3 +1,5 @@
 *.o
 *.exe
 *.gch
+.clangd
+compile_flags.txt
