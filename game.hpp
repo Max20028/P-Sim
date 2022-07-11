@@ -14,10 +14,12 @@
 #include "resc/Systems/SimpleMeshSystem.hpp"
 #include "resc/Systems/SpinSystem.hpp"
 #include "resc/prefabs.hpp"
+#include "Core/EventManager.hpp"
 
 HWND hwnd;
 
 Renderer* renderer;
+EventManager* eventManager;
 
 Scene scene;
 std::shared_ptr<PhysicsSystem> physicsSystem;
@@ -110,6 +112,7 @@ void updateGame(float dt, int tps) {
 
 void startGame(HWND hwn, HINSTANCE hInstance) {
     renderer = new Renderer();
+    eventManager = new EventManager();
     hwnd = hwn;
     renderer->InitRenderer(hwnd, hInstance);
 
@@ -166,6 +169,7 @@ void startGame(HWND hwn, HINSTANCE hInstance) {
     //Create Light
     float attenuation[3] = {0.0f, 0.2f, 0.0f};
     entities.push_back(createPointLight(5, 0, -2, 0.3, 1.0f, 100, attenuation));
+    spinSystem->start();
 }
 
 void endGame(HWND hwnd) {

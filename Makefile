@@ -35,7 +35,7 @@ main: renderer
 	$(CC) $(CFLAGS) -c windowsmain.cpp $(HEADFLAGS)
 
 renderer: 
-	$(CC) $(CFLAGS) -c Graphics/DirectXRender.cpp
+	$(CC) $(CFLAGS) -c Graphics/DirectXRender.cpp $(HEADFLAGS)
 	
 
 

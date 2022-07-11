@@ -1,6 +1,9 @@
 #include "Renderer.h"
+#include "Core/EventManager.hpp"
 #include <vector>
 #include <iostream>
+
+extern EventManager* eventManager;
 
 //Function Prototypes
 bool InitDirectInput(HINSTANCE hInstance, HWND hwnd);
@@ -577,6 +580,7 @@ void Renderer::DetectInput(double time, HWND hwnd)
 
     if(keyboardState[DIK_A] & 0x80)
     {
+        eventManager->postEvent(new ToggleSpinEvent());
     }
     if(keyboardState[DIK_D] & 0x80)
     {

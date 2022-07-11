@@ -12,12 +12,12 @@
 #include <d3dcompiler.h>    //Shader compiler
 
 //Misc Not Me Imports
-#include <sstream>          // Used for the 2d drawn string 
+#include <sstream>          // Used for the 2d drawn string
 #include <vector>           //Vector is so easy to use
 
 //Engine Config
-#include "../Core/Robotmap.h"
-#include "../resc/Components/CoreComponents.h"
+#include "Core/Robotmap.h"
+#include "resc/Components/CoreComponents.h"
 
 struct Renderable {
     ID3D11Buffer* IndexBuffer;

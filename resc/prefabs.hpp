@@ -49,7 +49,7 @@ Entity createModelPrefab(std::string path) {
                                     .gravity = -1.0f
                                     });
     //Add SPIN
-    scene.AddComponent(entity, Spin{.spinspeed=0.5});
+    scene.AddComponent(entity, Spin{.doSpin=true,.spinspeed=0.5});
     return entity;
 }
 

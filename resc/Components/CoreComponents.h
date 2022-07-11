@@ -1,5 +1,8 @@
 #pragma once
-#include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\d3d11.h>
+#include "Core/RobotMap.h"
+//Note: Despite not being needed, windows.h makes clangd happy about d3d11. This is due to header linking and nothing intrinsic I think
+#include <windows.h>
+#include <C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\d3d11.h> //NOLINT
 struct Camera {
     bool isMainCamera;
     float VerticalFOV;
@@ -9,9 +12,6 @@ struct Camera {
     float farPlaneDist;
 };
 struct CubeMesh {
-    // float width; //x
-    // float height; //y
-    // float depth; //z
     float color[4];
 };
 struct Rigidbody {
@@ -49,4 +49,9 @@ struct Light {
 
     float ambient[4];
     float diffuse[4];
+};
+struct FPSPlayerController {
+    Entity* camera;
+    float cameraSensitivity;
+    
 };
