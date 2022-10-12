@@ -21,6 +21,8 @@ using Signature = std::bitset<MAX_COMPONENTS>;
 
 #define INITIALLY_WINDOWED true
 #define MAX_LIGHTS 16
+#define MAX_CONTROLLERS 4
+#define MAX_MOUSE_BUTTONS 24
 
 #define FPS_CAP 60
 

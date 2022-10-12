@@ -21,7 +21,7 @@ void OldImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, 
         if(file.eof()) break;
         char line[lines.length()+1];
         strcpy(line, lines.c_str());
-        // Returns first token 
+        // Returns first token
         char *token = strtok(line, " ");
         // std::vector<XMFLOAT3> norms;
         if(strcmp(token, "v") == 0) {
@@ -178,7 +178,7 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
         indvec.push_back(tempvert[a].v-1);
         indvec.push_back(tempvert[b].v-1);
         indvec.push_back(tempvert[c].v-1);
-        
+
         //Construct the Tex
         if(tempvert[a].t != 0)
             vertvec[tempvert[a].v-1].texcoord = tex[tempvert[a].t-1];
@@ -186,7 +186,7 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
             vertvec[tempvert[b].v-1].texcoord = tex[tempvert[b].t-1];
         if(tempvert[c].t != 0)
             vertvec[tempvert[c].v-1].texcoord = tex[tempvert[c].t-1];
-        
+
         //Construct the normals
         if(tempvert[a].n != 0)
             vertvec[tempvert[a].v-1].normal = norms[tempvert[a].n-1];

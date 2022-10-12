@@ -25,7 +25,7 @@ void Renderer::updateLights(RenderLight light[MAX_LIGHTS], int numLights) {
         constbuffPerFrame.light[i] = light[i];
     }
     devcon->UpdateSubresource( cbPerFrameBuffer, 0, NULL, &constbuffPerFrame, 0, 0 );
-    devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer); 
+    devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer);
 }
 
 void Renderer::EndRenderer(HWND hwnd) {
@@ -35,10 +35,10 @@ void Renderer::EndRenderer(HWND hwnd) {
 //TODO: FIGURE THIS SHIT OUT
 
 void Renderer::startRenderFrame(CameraDetails camDets) {
-    
+
     devcon->OMSetRenderTargets(1, &backbuffer, depthStencilView);
     devcon->UpdateSubresource( cbPerFrameBuffer, 0, NULL, &constbuffPerFrame, 0, 0 );
-    devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer); 
+    devcon->PSSetConstantBuffers(0, 1, &cbPerFrameBuffer);
 
     //Reset the V and P Shaders
     devcon->VSSetShader(pVS, 0, 0);
@@ -51,7 +51,7 @@ void Renderer::startRenderFrame(CameraDetails camDets) {
 
     //Setup camera
     DirectX::XMVECTOR camPosition = DirectX::XMVectorSet(camDets.position[0], camDets.position[1], camDets.position[2], 0.0f);
-    
+
     DirectX::XMMATRIX rotationMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixRotationRollPitchYaw(camDets.rotation[0], camDets.rotation[1], camDets.rotation[2]));
 
     DirectX::XMVECTOR camTarget = DirectX::XMVector3TransformCoord(DirectX::XMVectorSet( 0.0f, 0.0f, 1.0f, 0.0f ), rotationMatrix);
@@ -61,7 +61,7 @@ void Renderer::startRenderFrame(CameraDetails camDets) {
     camUp = DirectX::XMVectorSetW(camUp, 0.0f);
 
     camView = DirectX::XMMatrixLookAtLH( camPosition, camTarget, camUp );
-    
+
     camProjection = DirectX::XMMatrixPerspectiveFovLH( camDets.verticalFOV, (float)ClientWidth/ClientHeight, camDets.nearPlaneDist, camDets.farPlaneDist);
 
 }
@@ -76,8 +76,8 @@ void Renderer::renderObject(Renderable renderable) {
     //Set the WVP matrix and send it to the constant buffer in effect file
     DirectX::XMMATRIX WVP = DirectX::XMMatrixIdentity();
     WVP = renderable.World * camView * camProjection;
-    cbPerObj.WVP = XMMatrixTranspose(WVP);    
-    cbPerObj.World = XMMatrixTranspose(renderable.World);    
+    cbPerObj.WVP = XMMatrixTranspose(WVP);
+    cbPerObj.World = XMMatrixTranspose(renderable.World);
     cbPerObj.difColor = renderable.difColor;
     cbPerObj.hasTexture = false;
     cbPerObj.hasNormMap = false;
@@ -132,7 +132,7 @@ void Renderer::finishRenderFrame(std::wstring instr) {
 //     vertexBufferDesc.CPUAccessFlags = 0;
 //     vertexBufferDesc.MiscFlags = 0;
 
-//     D3D11_SUBRESOURCE_DATA vertexBufferData; 
+//     D3D11_SUBRESOURCE_DATA vertexBufferData;
 
 //     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
 //     vertexBufferData.pSysMem = &vertices[0];
@@ -172,7 +172,7 @@ void Renderer::createBuffers(int numIndices, int numVerts, DWORD* indices, Verte
     vertexBufferDesc.CPUAccessFlags = 0;
     vertexBufferDesc.MiscFlags = 0;
 
-    D3D11_SUBRESOURCE_DATA vertexBufferData; 
+    D3D11_SUBRESOURCE_DATA vertexBufferData;
 
     ZeroMemory( &vertexBufferData, sizeof(vertexBufferData) );
     vertexBufferData.pSysMem = vertices;
@@ -182,7 +182,7 @@ void Renderer::createBuffers(int numIndices, int numVerts, DWORD* indices, Verte
         std::cout << "Vertex Failed A\n";
 
     // //Create constant buffer
-    // D3D11_BUFFER_DESC cbbd;    
+    // D3D11_BUFFER_DESC cbbd;
     // ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
 
     // cbbd.Usage = D3D11_USAGE_DEFAULT;
@@ -302,12 +302,12 @@ void Renderer::InitD3D(HWND hwnd, HINSTANCE hInstance)
     d2drendertarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black, 1.0f), &blackbrush);
 // printf("Here\n");
     dwritetextformat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_JUSTIFIED);
-        
+
     dwritetextformat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 
 // -----------------
 
-    
+
 
     InitPipeline();
 
@@ -328,33 +328,13 @@ void Renderer::InitD3D(HWND hwnd, HINSTANCE hInstance)
     devcon->OMSetRenderTargets(1, &backbuffer, depthStencilView);
 
     //Init Direct Input
-    if(!InitDirectInput(hInstance, hwnd)) {
-        MessageBox(0, L"Direct Input Initialization - Failed",L"Error", MB_OK);
-        CleanD3D(hwnd);
-        return;
-    }
+    //if(!InitDirectInput(hInstance, hwnd)) {
+    //    MessageBox(0, L"Direct Input Initialization - Failed",L"Error", MB_OK);
+    //   CleanD3D(hwnd);
+    //    return;
+    //}
 }
 
-bool Renderer::InitDirectInput(HINSTANCE hInstance, HWND hwnd) {
-    DirectInput8Create(hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&DirectInput, NULL);
-
-    DirectInput->CreateDevice(GUID_SysKeyboard, &DIKeyboard, NULL);
-
-    DirectInput->CreateDevice(GUID_SysMouse, &DIMouse, NULL);
-
-    DIKeyboard->SetDataFormat(&c_dfDIKeyboard);
-    DIKeyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-
-    DIMouse->SetDataFormat(&c_dfDIMouse);
-
-    //Setup mouse
-    //This version has mouse invisible
-    DIMouse->SetCooperativeLevel(hwnd, DISCL_EXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
-    //This version has mouse visible. We want it visible for picking
-    // DIMouse->SetCooperativeLevel(hwnd, DISCL_NONEXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
-
-    return true;
-}
 
 // this is the function that cleans up Direct3D and COM
 void Renderer::CleanD3D(HWND hwnd) {
@@ -385,10 +365,6 @@ void Renderer::CleanD3D(HWND hwnd) {
     dwritetextformat->Release();
     blackbrush->Release();
     cbPerFrameBuffer->Release();
-
-    DIKeyboard->Unacquire();
-    DIMouse->Unacquire();
-    DirectInput->Release();
 
 }
 
@@ -444,7 +420,7 @@ void Renderer::InitPipeline()
     depthStencilDesc.SampleDesc.Quality = 0;
     depthStencilDesc.Usage          = D3D11_USAGE_DEFAULT;
     depthStencilDesc.BindFlags      = D3D11_BIND_DEPTH_STENCIL;
-    depthStencilDesc.CPUAccessFlags = 0; 
+    depthStencilDesc.CPUAccessFlags = 0;
     depthStencilDesc.MiscFlags      = 0;
 
     dev->CreateTexture2D(&depthStencilDesc, NULL, &depthStencilBuffer);
@@ -502,7 +478,7 @@ void Renderer::InitPipeline()
 
 
     //Create constant buffer
-    D3D11_BUFFER_DESC cbbd;    
+    D3D11_BUFFER_DESC cbbd;
     ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
 
     cbbd.Usage = D3D11_USAGE_DEFAULT;
@@ -560,67 +536,5 @@ void Renderer::drawstuff(std::wstring instr) {
             );
 
         d2drendertarget->EndDraw();
-}
-
-void Renderer::DetectInput(double time, HWND hwnd)
-{
-    DIMOUSESTATE mouseCurrState;
-
-    BYTE keyboardState[256];
-
-    DIKeyboard->Acquire();
-    // DIMouse->Acquire();
-
-    DIMouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseCurrState);
-
-    DIKeyboard->GetDeviceState(sizeof(keyboardState),(LPVOID)&keyboardState);
-
-    if(keyboardState[DIK_ESCAPE] & 0x80)
-        PostMessage(hwnd, WM_DESTROY, 0, 0);
-
-    if(keyboardState[DIK_A] & 0x80)
-    {
-        eventManager->postEvent(new ToggleSpinEvent());
-    }
-    if(keyboardState[DIK_D] & 0x80)
-    {
-    }
-    if(keyboardState[DIK_W] & 0x80)
-    {
-    }
-    if(keyboardState[DIK_S] & 0x80)
-    {
-    }
-    if(keyboardState[DIK_1] & 0x80) {
-    }
-    if(keyboardState[DIK_2] & 0x80) {
-    }
-    if(keyboardState[DIK_R] & 0X80)
-    {
-    }
-
-    //Left Mouse Button
-    if(mouseCurrState.rgbButtons[0]){ }
-
-    if(!mouseCurrState.rgbButtons[0])
-    {
-    }
-
-
-    if((mouseCurrState.lX != mouseLastState.lX) || (mouseCurrState.lY != mouseLastState.lY))
-    {
-        // camYaw += mouseLastState.lX * 0.001f;
-
-        // camPitch += mouseCurrState.lY * 0.001f;
-        // if(abs(camPitch) > 1.57) {
-        //     if(camPitch > 0) camPitch = 1.57;
-        //     else camPitch = -1.57;
-        // }
-
-        // mouseLastState = mouseCurrState;
-    }
-
-
-    return;
 }
 

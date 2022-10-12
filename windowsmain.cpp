@@ -8,6 +8,8 @@
 #endif
 
 #include <cstdio>
+#include <chrono>
+#include <thread>
 
 #include "game.hpp"
 
@@ -26,6 +28,8 @@ int fps = 0;
 __int64 frameTimeOld = 0;
 double frameTime;
 
+int targetFPS = 60;
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void StartTimer();
 double GetTime();
@@ -35,18 +39,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 {
     // Register the window class.
     const wchar_t CLASS_NAME[]  = L"T-Physics-Sim";
-    
+
     WNDCLASS wc = { };
 
     wc.lpfnWndProc   = WindowProc;
     wc.hInstance     = hInstance;
     wc.lpszClassName = CLASS_NAME;
-    
+
 
     RegisterClass(&wc);
 
     // Create the window.
-    
+
 
     HWND hwnd = CreateWindowEx(
         0,                              // Optional window styles.
@@ -58,7 +62,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         //This should be overwritten once directx stuff is called
         300, 300, 680, 680,
 
-        NULL,       // Parent window    
+        NULL,       // Parent window
         NULL,       // Menu
         hInstance,  // Instance handle
         NULL        // Additional application data
@@ -102,6 +106,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         }
         //Returns time since GetFrameTime was last called
         frameTime = GetFrameTime();
+        double targetTime = 1.0f/targetFPS;
+        int sleep = 1000000*(targetTime-frameTime);
+        if(sleep > 0)
+            std::this_thread::sleep_for(std::chrono::microseconds(sleep));
         updateGame(frameTime, fps);
 
     }

@@ -98,15 +98,12 @@ struct RenderLight
 
     void finishRenderFrame(std::wstring debug_string);
 
-    void DetectInput(double time, HWND hwnd);
-
     void createBuffers(int numIndices, int numVerts, std::vector<DWORD> indices, std::vector<Vertex> vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer);
     void createBuffers(int numIndices, int numVerts, DWORD* indices, Vertex* vertices, ID3D11Buffer** indexBuffer, ID3D11Buffer** vertBuffer);
 
 private:
 
     void InitD3D(HWND hwnd, HINSTANCE hInstance);
-    bool InitDirectInput(HINSTANCE hInstance, HWND hwnd);
     void CleanD3D(HWND hwnd);
     void InitPipeline();
     void drawstuff(std::wstring instr);
@@ -165,13 +162,6 @@ struct cbPerFrame
     IDWriteFactory* dwritefactory;            // the pointer to our 2d text factory (This is window's way of drawing text on d2d surface)
     IDWriteTextFormat* dwritetextformat;      // the format specifier for dwrite drawing
     ID2D1SolidColorBrush* blackbrush;         // the solid black brush for drawing black text
-
-    //The input stuff
-    IDirectInputDevice8* DIKeyboard;
-    IDirectInputDevice8* DIMouse;
-
-    DIMOUSESTATE mouseLastState;
-    LPDIRECTINPUT8 DirectInput;
 
     //Camera Stuff
     DirectX::XMMATRIX camView;

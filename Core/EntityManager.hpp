@@ -42,7 +42,6 @@ public:
 
     Signature GetSignature(Entity ent) {
         assert(ent < MAX_ENTITIES && "Tried to get signature of entity outside of max entities");
-        
         return signatures[ent];
     }
 

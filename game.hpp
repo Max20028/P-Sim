@@ -14,12 +14,15 @@
 #include "resc/Systems/SimpleMeshSystem.hpp"
 #include "resc/Systems/SpinSystem.hpp"
 #include "resc/prefabs.hpp"
+
 #include "Core/EventManager.hpp"
+#include "Core/InputManager.hpp"
 
 HWND hwnd;
 
 Renderer* renderer;
 EventManager* eventManager;
+InputManager* inputManager;
 
 Scene scene;
 std::shared_ptr<PhysicsSystem> physicsSystem;
@@ -37,7 +40,7 @@ void ImportObj(std::string filepath, Vertex** vert, DWORD** ind, int* nvert, int
 
 void updateGame(float dt, int tps) {
     //Update Input
-    renderer->DetectInput(dt, hwnd);
+    //renderer->DetectInput(dt, hwnd);
     //Run update code here
     physicsSystem->update(dt);
     spinSystem->update(dt);
